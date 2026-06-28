@@ -130,62 +130,54 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.documentElement.replaceWith(doc.documentElement);
 
 (function() {
+
+  /* ── helpers ── */
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function loadKey(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch(e) { return []; } }
+  function saveKey(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+
   /* ── Mobile grid fix ── */
   if (window.innerWidth <= 767) {
     var mob = document.createElement('style');
-    mob.textContent = [
-      '@media (max-width:767px){',
-      '[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}',
-      '[style*="height:460px"]{height:400px!important}',
-      '[style*="padding:28px 40px"]{padding:16px!important}',
-      '[style*="font-size:38px"]{font-size:24px!important}',
-      'body{padding:16px!important}}'
-    ].join('');
+    mob.textContent = '@media (max-width:767px){' +
+      '[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}' +
+      '[style*="height:460px"]{height:400px!important}' +
+      '[style*="padding:28px 40px"]{padding:16px!important}' +
+      '[style*="font-size:38px"]{font-size:24px!important}' +
+      'body{padding:16px!important}' +
+      '#my-row{grid-template-columns:1fr!important}}';
     document.head.appendChild(mob);
     function patchInline() {
       [].forEach.call(document.querySelectorAll('*'), function(el) {
         var st = el.getAttribute('style') || '';
-        if (st.indexOf('1fr 1fr') > -1)   el.style.gridTemplateColumns = '1fr';
-        if (st.indexOf('460px')  > -1)    el.style.height = '400px';
-        if (st.indexOf('28px 40px') > -1) el.style.padding = '16px';
-        if (st.indexOf('font-size:38px') > -1) el.style.fontSize = '24px';
+        if (st.indexOf('1fr 1fr') > -1)        el.style.gridTemplateColumns = '1fr';
+        if (st.indexOf('460px') > -1)           el.style.height = '400px';
+        if (st.indexOf('28px 40px') > -1)       el.style.padding = '16px';
+        if (st.indexOf('font-size:38px') > -1)  el.style.fontSize = '24px';
       });
     }
-    patchInline();
-    setTimeout(patchInline, 300);
-    setTimeout(patchInline, 1000);
+    patchInline(); setTimeout(patchInline, 300); setTimeout(patchInline, 1000);
   }
 
-  /* ── My Phrases feature ── */
-  var STORE = "italiano-my-phrases";
-
-  function loadPhrases() {
-    try { return JSON.parse(localStorage.getItem(STORE)) || []; }
-    catch(e) { return []; }
-  }
-  function savePhrases(arr) {
-    localStorage.setItem(STORE, JSON.stringify(arr));
-  }
-  function esc(str) {
-    return String(str || '')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
-
-  /* speak via data attribute — avoids single-quote escaping in onclick */
+  /* ── speak helper ── */
   window.__mpSpeak = function(btn) {
     var text = btn.getAttribute('data-it');
     if (!text || !window.speechSynthesis) return;
     var u = new SpeechSynthesisUtterance(text);
-    u.lang = "it-IT";
-    u.rate = 0.95;
+    u.lang = 'it-IT'; u.rate = 0.95;
     speechSynthesis.speak(u);
   };
 
-  /* ── Sync active phrases into the scrolling marquee ── */
+  /* ════════════════════════════════
+     MY PHRASES
+  ════════════════════════════════ */
+  var PH_KEY = 'italiano-my-phrases';
+
   function syncPhraseBox() {
     var tracks = document.querySelectorAll('.marquee-track');
-    var phrases = loadPhrases();
+    var phrases = loadKey(PH_KEY);
     tracks.forEach(function(track) {
       track.querySelectorAll('[data-cphrase]').forEach(function(el) { el.remove(); });
       phrases.filter(function(p) { return p.active; }).forEach(function(p) {
@@ -198,129 +190,274 @@ document.addEventListener('DOMContentLoaded', async function() {
             '<div style="font-size:17px;font-weight:600;color:#fff;letter-spacing:-.3px;">' + esc(p.it) + '</div>' +
             (p.en ? '<div style="font-size:14px;color:#9fc4ba;margin-top:3px;">' + esc(p.en) + '</div>' : '') +
           '</div>' +
-          '<button data-it="' + esc(p.it) + '" onclick="window.__mpSpeak(this)" ' +
-            'style="flex:0 0 auto;width:40px;height:40px;border:none;border-radius:9999px;background:#a4d4c5;color:#10302b;font-size:17px;cursor:pointer;">🔊</button>';
+          '<button data-it="' + esc(p.it) + '" onclick="window.__mpSpeak(this)" style="flex:0 0 auto;width:40px;height:40px;border:none;border-radius:9999px;background:#a4d4c5;color:#10302b;font-size:17px;cursor:pointer;">🔊</button>';
         track.appendChild(div);
       });
     });
   }
 
-  /* ── Render the saved-phrase list inside the panel ── */
-  function renderList() {
-    var list = document.getElementById('mph-list');
-    if (!list) return;
-    var phrases = loadPhrases();
+  function renderPhraseList(container) {
+    var phrases = loadKey(PH_KEY);
     if (!phrases.length) {
-      list.innerHTML = '<p style="color:#6a6a6a;font-size:14px;padding:8px 4px;">No custom phrases yet. Add one above.</p>';
+      container.innerHTML = '<p style="color:#a4d4c5;font-size:13px;text-align:center;padding:12px 0;opacity:.7;">No custom phrases yet.</p>';
       return;
     }
-    /* group by tag */
-    var tagOrder = [], tags = {};
+    container.innerHTML = '';
     phrases.forEach(function(p) {
-      if (!tags[p.tag]) { tags[p.tag] = []; tagOrder.push(p.tag); }
-      tags[p.tag].push(p);
+      var row = document.createElement('div');
+      var active = p.active;
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;border-radius:12px;padding:10px 12px;margin-bottom:6px;background:' + (active ? '#1f4242' : 'rgba(255,255,255,.06)') + ';';
+      row.innerHTML =
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#a4d4c5;margin-bottom:2px;opacity:.8;">' + esc(p.tag) + '</div>' +
+          '<div style="font-size:14px;font-weight:600;color:#fff;">' + esc(p.it) + '</div>' +
+          (p.en ? '<div style="font-size:12px;color:#9fc4ba;">' + esc(p.en) + '</div>' : '') +
+        '</div>' +
+        '<button data-ptoggle="' + p.id + '" style="padding:4px 11px;border:none;border-radius:9999px;background:' + (active ? '#a4d4c5' : 'rgba(255,255,255,.15)') + ';color:' + (active ? '#0a2a20' : '#a4d4c5') + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' + (active ? '● On' : '○ Off') + '</button>' +
+        '<button data-pdel="' + p.id + '" style="width:26px;height:26px;border:none;border-radius:9999px;background:rgba(255,255,255,.1);color:#a4d4c5;font-size:16px;cursor:pointer;padding:0;line-height:1;">×</button>';
+      container.appendChild(row);
     });
-    list.innerHTML = '';
-    tagOrder.forEach(function(tag) {
-      var wrap = document.createElement('div');
-      wrap.style.marginBottom = '14px';
-      wrap.innerHTML = '<div style="font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#6a6a6a;margin-bottom:8px;padding-left:4px;">' + esc(tag) + '</div>';
-      tags[tag].forEach(function(p) {
-        var row = document.createElement('div');
-        var active = p.active;
-        row.style.cssText = 'display:flex;align-items:center;gap:10px;border-radius:14px;padding:11px 14px;margin-bottom:7px;background:' + (active ? '#1a3a3a' : '#f0ece0') + ';';
-        row.innerHTML =
-          '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:15px;font-weight:600;color:' + (active ? '#fff' : '#0a0a0a') + ';letter-spacing:-.2px;">' + esc(p.it) + '</div>' +
-            (p.en ? '<div style="font-size:13px;color:' + (active ? '#9fc4ba' : '#6a6a6a') + ';margin-top:2px;">' + esc(p.en) + '</div>' : '') +
-          '</div>' +
-          '<button data-toggle="' + p.id + '" style="padding:5px 13px;border:none;border-radius:9999px;background:' + (active ? '#a4d4c5' : '#d0cbbe') + ';color:' + (active ? '#0a2a20' : '#6a6a6a') + ';font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">' + (active ? '● On' : '○ Off') + '</button>' +
-          '<button data-del="' + p.id + '" style="width:30px;height:30px;border:none;border-radius:9999px;background:rgba(0,0,0,.12);color:' + (active ? '#a4d4c5' : '#999') + ';font-size:18px;cursor:pointer;line-height:1;padding:0;">×</button>';
-        wrap.appendChild(row);
-      });
-      list.appendChild(wrap);
-    });
-
-    list.querySelectorAll('[data-toggle]').forEach(function(btn) {
+    container.querySelectorAll('[data-ptoggle]').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        var id = Number(btn.getAttribute('data-toggle'));
-        var arr = loadPhrases();
+        var id = Number(btn.getAttribute('data-ptoggle'));
+        var arr = loadKey(PH_KEY);
         arr.forEach(function(p) { if (p.id === id) p.active = !p.active; });
-        savePhrases(arr); renderList(); syncPhraseBox();
+        saveKey(PH_KEY, arr); renderPhraseList(container); syncPhraseBox();
       });
     });
-    list.querySelectorAll('[data-del]').forEach(function(btn) {
+    container.querySelectorAll('[data-pdel]').forEach(function(btn) {
       btn.addEventListener('click', function() {
-        var id = Number(btn.getAttribute('data-del'));
-        savePhrases(loadPhrases().filter(function(p) { return p.id !== id; }));
-        renderList(); syncPhraseBox();
+        var id = Number(btn.getAttribute('data-pdel'));
+        saveKey(PH_KEY, loadKey(PH_KEY).filter(function(p) { return p.id !== id; }));
+        renderPhraseList(container); syncPhraseBox();
       });
     });
   }
 
-  /* ── Build the panel DOM ── */
-  function buildPanel() {
-    if (document.getElementById('my-phrases-panel')) { renderList(); return; }
-
-    var panel = document.createElement('div');
+  function buildPhrasesPanel() {
+    var panel = document.createElement('section');
     panel.id = 'my-phrases-panel';
-    panel.style.cssText = 'max-width:1320px;margin:28px auto 56px;padding:0 ' + (window.innerWidth <= 767 ? '16px' : '40px') + ';font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;';
-
+    panel.style.cssText = 'background:#1a3a3a;border-radius:24px;padding:24px;display:flex;flex-direction:column;';
     panel.innerHTML =
-      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
-        '<div style="width:32px;height:32px;border-radius:10px;background:#1a3a3a;display:flex;align-items:center;justify-content:center;font-size:15px;">✍️</div>' +
-        '<h2 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.5px;color:#0a0a0a;">My Phrases</h2>' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">' +
+        '<span style="font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a4d4c5;">My Phrases</span>' +
       '</div>' +
-      /* form */
-      '<div style="background:#1a3a3a;border-radius:20px;padding:20px 22px;margin-bottom:18px;">' +
-        '<div id="mph-fields" style="display:grid;gap:10px;margin-bottom:14px;">' +
-          '<div>' +
-            '<label style="display:block;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:5px;">Italian *</label>' +
-            '<input id="mph-it" placeholder="e.g. Buongiorno" style="width:100%;box-sizing:border-box;padding:10px 13px;border:none;border-radius:11px;background:#1f4242;color:#fff;font-size:15px;font-family:inherit;outline:none;" />' +
-          '</div>' +
-          '<div>' +
-            '<label style="display:block;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:5px;">English (optional)</label>' +
-            '<input id="mph-en" placeholder="e.g. Good morning" style="width:100%;box-sizing:border-box;padding:10px 13px;border:none;border-radius:11px;background:#1f4242;color:#fff;font-size:15px;font-family:inherit;outline:none;" />' +
-          '</div>' +
-          '<div style="display:flex;gap:10px;">' +
-            '<div style="flex:1;">' +
-              '<label style="display:block;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:5px;">Tag</label>' +
-              '<input id="mph-tag" placeholder="e.g. greetings" style="width:100%;box-sizing:border-box;padding:10px 13px;border:none;border-radius:11px;background:#1f4242;color:#fff;font-size:15px;font-family:inherit;outline:none;" />' +
-            '</div>' +
-            '<div style="display:flex;align-items:flex-end;">' +
-              '<button id="mph-add" style="height:42px;padding:0 20px;border:none;border-radius:11px;background:#a4d4c5;color:#0a2a20;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>' +
-            '</div>' +
-          '</div>' +
+      /* add form */
+      '<div style="background:#1f4242;border-radius:16px;padding:14px;margin-bottom:14px;">' +
+        '<input id="mph-it" placeholder="Italian phrase *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+        '<input id="mph-en" placeholder="English (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+        '<div style="display:flex;gap:8px;">' +
+          '<input id="mph-tag" placeholder="Tag (e.g. greetings)" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:14px;font-family:inherit;outline:none;" />' +
+          '<button id="mph-add" style="padding:0 16px;border:none;border-radius:9px;background:#a4d4c5;color:#0a2a20;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>' +
         '</div>' +
       '</div>' +
-      '<div id="mph-list"></div>';
+      '<div id="mph-list" style="overflow-y:auto;flex:1;"></div>';
+    return panel;
+  }
 
-    /* insert after bento grid */
+  /* ════════════════════════════════
+     MY FLASHCARDS
+  ════════════════════════════════ */
+  var FC_KEY = 'italiano-my-flashcards';
+  var fcIndex = 0;
+  var fcFlipped = false;
+
+  function renderFlipCard() {
+    var cards = loadKey(FC_KEY).filter(function(c) { return c.active; });
+    var display = document.getElementById('mfc-card-display');
+    var counter  = document.getElementById('mfc-counter');
+    if (!display) return;
+    if (!cards.length) {
+      fcIndex = 0; fcFlipped = false;
+      display.innerHTML = '<div style="color:#9a86d0;font-size:13px;text-align:center;opacity:.8;">Toggle cards on to practice.</div>';
+      if (counter) counter.textContent = '0 / 0';
+      return;
+    }
+    if (fcIndex >= cards.length) fcIndex = 0;
+    var c = cards[fcIndex];
+    if (counter) counter.textContent = (fcIndex + 1) + ' / ' + cards.length;
+    display.innerHTML =
+      '<div id="mfc-flip-inner" style="position:relative;width:100%;height:160px;cursor:pointer;perspective:800px;" onclick="window.__mfcFlip()">' +
+        '<div id="mfc-front" style="position:absolute;inset:0;background:#fffaf0;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-shadow:0 6px 20px rgba(42,37,64,.18);backface-visibility:hidden;transition:transform .45s;">' +
+          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#b8a4ed;margin-bottom:8px;">Italiano</div>' +
+          '<div style="font-size:22px;font-weight:700;color:#0a0a0a;text-align:center;letter-spacing:-.5px;">' + esc(c.it) + '</div>' +
+          '<div style="font-size:12px;color:#9a86d0;margin-top:10px;">tap to reveal</div>' +
+        '</div>' +
+        '<div id="mfc-back" style="position:absolute;inset:0;background:#2a2540;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-shadow:0 6px 20px rgba(42,37,64,.18);backface-visibility:hidden;transform:rotateY(180deg);transition:transform .45s;">' +
+          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#b8a4ed;margin-bottom:8px;">English</div>' +
+          '<div style="font-size:20px;font-weight:600;color:#fff;text-align:center;">' + esc(c.en) + '</div>' +
+          (c.ex ? '<div style="font-size:12px;color:#c4b8e8;margin-top:8px;text-align:center;font-style:italic;">' + esc(c.ex) + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    /* restore flip state */
+    if (fcFlipped) {
+      var front = document.getElementById('mfc-front');
+      var back  = document.getElementById('mfc-back');
+      if (front) front.style.transform = 'rotateY(-180deg)';
+      if (back)  back.style.transform  = 'rotateY(0deg)';
+    }
+  }
+
+  window.__mfcFlip = function() {
+    fcFlipped = !fcFlipped;
+    var front = document.getElementById('mfc-front');
+    var back  = document.getElementById('mfc-back');
+    if (!front || !back) return;
+    front.style.transform = fcFlipped ? 'rotateY(-180deg)' : 'rotateY(0deg)';
+    back.style.transform  = fcFlipped ? 'rotateY(0deg)'    : 'rotateY(180deg)';
+  };
+  window.__mfcPrev = function() {
+    var cards = loadKey(FC_KEY).filter(function(c) { return c.active; });
+    if (!cards.length) return;
+    fcFlipped = false;
+    fcIndex = (fcIndex - 1 + cards.length) % cards.length;
+    renderFlipCard();
+  };
+  window.__mfcNext = function() {
+    var cards = loadKey(FC_KEY).filter(function(c) { return c.active; });
+    if (!cards.length) return;
+    fcFlipped = false;
+    fcIndex = (fcIndex + 1) % cards.length;
+    renderFlipCard();
+  };
+  window.__mfcShuffle = function() {
+    fcFlipped = false;
+    var cards = loadKey(FC_KEY).filter(function(c) { return c.active; });
+    fcIndex = Math.floor(Math.random() * cards.length);
+    renderFlipCard();
+  };
+
+  function renderCardList(container) {
+    var cards = loadKey(FC_KEY);
+    if (!cards.length) {
+      container.innerHTML = '<p style="color:#9a86d0;font-size:13px;text-align:center;padding:12px 0;opacity:.7;">No custom flashcards yet.</p>';
+      return;
+    }
+    container.innerHTML = '';
+    cards.forEach(function(c) {
+      var row = document.createElement('div');
+      var active = c.active;
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;border-radius:12px;padding:10px 12px;margin-bottom:6px;background:' + (active ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.05)') + ';';
+      row.innerHTML =
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#b8a4ed;margin-bottom:2px;opacity:.8;">' + esc(c.tag) + '</div>' +
+          '<div style="font-size:14px;font-weight:600;color:#fff;">' + esc(c.it) + '</div>' +
+          '<div style="font-size:12px;color:#c4b8e8;">' + esc(c.en) + '</div>' +
+        '</div>' +
+        '<button data-fctoggle="' + c.id + '" style="padding:4px 11px;border:none;border-radius:9999px;background:' + (active ? '#b8a4ed' : 'rgba(255,255,255,.15)') + ';color:' + (active ? '#1a1030' : '#b8a4ed') + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' + (active ? '● On' : '○ Off') + '</button>' +
+        '<button data-fcdel="' + c.id + '" style="width:26px;height:26px;border:none;border-radius:9999px;background:rgba(255,255,255,.1);color:#b8a4ed;font-size:16px;cursor:pointer;padding:0;line-height:1;">×</button>';
+      container.appendChild(row);
+    });
+    container.querySelectorAll('[data-fctoggle]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = Number(btn.getAttribute('data-fctoggle'));
+        var arr = loadKey(FC_KEY);
+        arr.forEach(function(c) { if (c.id === id) c.active = !c.active; });
+        saveKey(FC_KEY, arr); renderCardList(container); renderFlipCard();
+      });
+    });
+    container.querySelectorAll('[data-fcdel]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = Number(btn.getAttribute('data-fcdel'));
+        saveKey(FC_KEY, loadKey(FC_KEY).filter(function(c) { return c.id !== id; }));
+        renderCardList(container); renderFlipCard();
+      });
+    });
+  }
+
+  function buildFlashcardsPanel() {
+    var panel = document.createElement('section');
+    panel.id = 'my-flashcards-panel';
+    panel.style.cssText = 'background:#b8a4ed;border-radius:24px;padding:24px;display:flex;flex-direction:column;';
+    panel.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+        '<span style="font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#2a2540;">My Flashcards</span>' +
+        '<span id="mfc-counter" style="font-size:12px;font-weight:600;color:#2a2540;opacity:.7;">0 / 0</span>' +
+      '</div>' +
+      /* flip card display */
+      '<div id="mfc-card-display" style="margin-bottom:10px;"></div>' +
+      /* controls */
+      '<div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px;">' +
+        '<button onclick="window.__mfcPrev()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.35);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">◀ Prev</button>' +
+        '<button onclick="window.__mfcShuffle()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.35);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">⇌ Shuffle</button>' +
+        '<button onclick="window.__mfcNext()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.35);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">Next ▶</button>' +
+      '</div>' +
+      /* add form */
+      '<div style="background:rgba(255,255,255,.2);border-radius:16px;padding:14px;margin-bottom:14px;">' +
+        '<input id="mfc-it" placeholder="Italian *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.35);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+        '<input id="mfc-en" placeholder="English *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.35);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+        '<input id="mfc-ex" placeholder="Example sentence (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.35);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+        '<div style="display:flex;gap:8px;">' +
+          '<input id="mfc-tag" placeholder="Tag" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.35);color:#1a1030;font-size:14px;font-family:inherit;outline:none;" />' +
+          '<button id="mfc-add" style="padding:0 16px;border:none;border-radius:9px;background:#2a2540;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="mfc-list" style="overflow-y:auto;flex:1;max-height:200px;"></div>';
+    return panel;
+  }
+
+  /* ── Build the combined row and wire everything up ── */
+  function init() {
+    if (document.getElementById('my-row')) return;
+
+    /* find bento grid */
     var bento = null;
     [].forEach.call(document.querySelectorAll('div'), function(el) {
       var st = el.getAttribute('style') || '';
       if (st.indexOf('grid-template-columns') > -1 && st.indexOf('gap:24px') > -1) bento = el;
     });
-    if (bento && bento.parentNode) {
-      bento.parentNode.insertBefore(panel, bento.nextSibling);
-    } else {
-      document.body.appendChild(panel);
-    }
+    if (!bento || !bento.parentNode) return;
 
-    renderList();
+    /* outer wrapper matches bento's parent padding/max-width */
+    var row = document.createElement('div');
+    row.id = 'my-row';
+    row.style.cssText = 'max-width:1320px;margin:24px auto 0;padding:0 40px;display:grid;grid-template-columns:1fr 1fr;gap:24px;';
+    if (window.innerWidth <= 767) row.style.cssText = 'max-width:1320px;margin:16px auto 0;padding:0 16px;display:grid;grid-template-columns:1fr;gap:16px;';
 
+    var fcPanel = buildFlashcardsPanel();
+    var phPanel = buildPhrasesPanel();
+    row.appendChild(fcPanel);
+    row.appendChild(phPanel);
+    bento.parentNode.insertBefore(row, bento.nextSibling);
+
+    /* render lists */
+    renderFlipCard();
+    renderCardList(document.getElementById('mfc-list'));
+    renderPhraseList(document.getElementById('mph-list'));
+    syncPhraseBox();
+
+    /* wire My Flashcards add button */
+    document.getElementById('mfc-add').addEventListener('click', function() {
+      var it  = document.getElementById('mfc-it').value.trim();
+      var en  = document.getElementById('mfc-en').value.trim();
+      var ex  = document.getElementById('mfc-ex').value.trim();
+      var tag = document.getElementById('mfc-tag').value.trim() || 'custom';
+      if (!it || !en) { document.getElementById(it ? 'mfc-en' : 'mfc-it').focus(); return; }
+      var arr = loadKey(FC_KEY);
+      arr.push({ id: Date.now(), it: it, en: en, ex: ex, tag: tag, active: true });
+      saveKey(FC_KEY, arr);
+      ['mfc-it','mfc-en','mfc-ex','mfc-tag'].forEach(function(id) { document.getElementById(id).value = ''; });
+      renderCardList(document.getElementById('mfc-list'));
+      renderFlipCard();
+    });
+    ['mfc-it','mfc-en','mfc-ex','mfc-tag'].forEach(function(id) {
+      document.getElementById(id).addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') document.getElementById('mfc-add').click();
+      });
+    });
+
+    /* wire My Phrases add button */
     document.getElementById('mph-add').addEventListener('click', function() {
       var it  = document.getElementById('mph-it').value.trim();
       var en  = document.getElementById('mph-en').value.trim();
-      var tag = (document.getElementById('mph-tag').value.trim()) || 'custom';
+      var tag = document.getElementById('mph-tag').value.trim() || 'custom';
       if (!it) { document.getElementById('mph-it').focus(); return; }
-      var arr = loadPhrases();
+      var arr = loadKey(PH_KEY);
       arr.push({ id: Date.now(), it: it, en: en, tag: tag, active: true });
-      savePhrases(arr);
-      document.getElementById('mph-it').value = '';
-      document.getElementById('mph-en').value = '';
-      document.getElementById('mph-tag').value = '';
-      renderList(); syncPhraseBox();
+      saveKey(PH_KEY, arr);
+      ['mph-it','mph-en','mph-tag'].forEach(function(id) { document.getElementById(id).value = ''; });
+      renderPhraseList(document.getElementById('mph-list'));
+      syncPhraseBox();
     });
     ['mph-it','mph-en','mph-tag'].forEach(function(id) {
       document.getElementById(id).addEventListener('keydown', function(e) {
@@ -329,7 +466,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
   }
 
-  function init() { buildPanel(); syncPhraseBox(); }
   setTimeout(init, 400);
   setTimeout(init, 1200);
 })();
