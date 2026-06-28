@@ -244,10 +244,10 @@ document.addEventListener('DOMContentLoaded', async function() {
       '</div>' +
       /* add form */
       '<div style="background:#1f4242;border-radius:16px;padding:14px;margin-bottom:14px;">' +
-        '<input id="mph-it" placeholder="Italian phrase *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
-        '<input id="mph-en" placeholder="English (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+        '<input id="mph-it" placeholder="Italian phrase *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:#0e2e2e;color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+        '<input id="mph-en" placeholder="English (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:#0e2e2e;color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
         '<div style="display:flex;gap:8px;">' +
-          '<input id="mph-tag" placeholder="Tag (e.g. greetings)" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.08);color:#fff;font-size:14px;font-family:inherit;outline:none;" />' +
+          '<input id="mph-tag" placeholder="Tag (e.g. greetings)" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:#0e2e2e;color:#fff;font-size:14px;font-family:inherit;outline:none;" />' +
           '<button id="mph-add" style="padding:0 16px;border:none;border-radius:9px;background:#a4d4c5;color:#0a2a20;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>' +
         '</div>' +
       '</div>' +
@@ -378,17 +378,17 @@ document.addEventListener('DOMContentLoaded', async function() {
       '<div id="mfc-card-display" style="margin-bottom:10px;"></div>' +
       /* controls */
       '<div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px;">' +
-        '<button onclick="window.__mfcPrev()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.35);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">◀ Prev</button>' +
-        '<button onclick="window.__mfcShuffle()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.35);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">⇌ Shuffle</button>' +
-        '<button onclick="window.__mfcNext()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.35);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">Next ▶</button>' +
+        '<button onclick="window.__mfcPrev()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.75);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">◀ Prev</button>' +
+        '<button onclick="window.__mfcShuffle()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.75);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">⇌ Shuffle</button>' +
+        '<button onclick="window.__mfcNext()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.75);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">Next ▶</button>' +
       '</div>' +
       /* add form */
-      '<div style="background:rgba(255,255,255,.2);border-radius:16px;padding:14px;margin-bottom:14px;">' +
-        '<input id="mfc-it" placeholder="Italian *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.35);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
-        '<input id="mfc-en" placeholder="English *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.35);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
-        '<input id="mfc-ex" placeholder="Example sentence (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.35);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+      '<div style="background:rgba(255,255,255,.4);border-radius:16px;padding:14px;margin-bottom:14px;">' +
+        '<input id="mfc-it" placeholder="Italian *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.75);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+        '<input id="mfc-en" placeholder="English *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.75);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
+        '<input id="mfc-ex" placeholder="Example sentence (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.75);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
         '<div style="display:flex;gap:8px;">' +
-          '<input id="mfc-tag" placeholder="Tag" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.35);color:#1a1030;font-size:14px;font-family:inherit;outline:none;" />' +
+          '<input id="mfc-tag" placeholder="Tag" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.75);color:#1a1030;font-size:14px;font-family:inherit;outline:none;" />' +
           '<button id="mfc-add" style="padding:0 16px;border:none;border-radius:9px;background:#2a2540;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>' +
         '</div>' +
       '</div>' +
