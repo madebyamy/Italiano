@@ -404,7 +404,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     var bento = null;
     [].forEach.call(document.querySelectorAll('div'), function(el) {
       var st = el.getAttribute('style') || '';
-      if (st.indexOf('grid-template-columns') > -1 && st.indexOf('gap:24px') > -1) bento = el;
+      if (st.indexOf('grid-template-columns') > -1 && st.indexOf('24px') > -1) bento = el;
     });
     if (!bento || !bento.parentNode) return;
 
