@@ -127,7 +127,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     // createElement so they execute, awaiting onload for src scripts to
     // preserve ordering (React before ReactDOM before Babel before text/babel).
     const doc = new DOMParser().parseFromString(template, 'text/html');
-    document.documentElement.replaceWith(doc.documentElement);
+    document.documentElement.replaceWith(doc.documentElement); if (window.innerWidth <= 767) {   (function injectMobileStyle() {     var s = document.createElement("style");     s.id = "mob";     s.textContent = "@media (max-width:767px){" +       "[style*=\"grid-template-columns:1fr 1fr\"]{grid-template-columns:1fr!important}" +       "[style*=\"height:460px\"]{height:auto!important;min-height:340px!important}" +       "[style*=\"padding:28px 40px\"]{padding:16px!important}" +       "[style*=\"font-size:38px\"]{font-size:24px!important}" +       "body{padding:16px!important}}";     document.head.appendChild(s);     function patch() {       document.querySelectorAll("*").forEach(function(el) {         var st = el.getAttribute("style") || "";         if (st.indexOf("1fr 1fr") > -1) el.style.gridTemplateColumns = "1fr";         if (st.indexOf("460px") > -1) { el.style.height = "auto"; el.style.minHeight = "340px"; }         if (st.indexOf("28px 40px") > -1) el.style.padding = "16px";         if (st.indexOf("38px") > -1 && st.indexOf("font-size") > -1) el.style.fontSize = "24px";       });     }     patch(); setTimeout(patch, 300); setTimeout(patch, 1000);   })(); }
     const dead = Array.from(document.scripts);
     for (const old of dead) {
       const s = document.createElement('script');
