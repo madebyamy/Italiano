@@ -129,138 +129,199 @@ document.addEventListener('DOMContentLoaded', async function() {
     const doc = new DOMParser().parseFromString(template, 'text/html');
     document.documentElement.replaceWith(doc.documentElement);
 
-if (window.innerWidth <= 767) {
-  (function() {
-    var s = document.createElement("style");
-    s.id = "mob";
-    s.textContent = "@media (max-width:767px){" +
-      "[style*=\"grid-template-columns:1fr 1fr\"]{grid-template-columns:1fr!important}" +
-      "[style*=\"height:460px\"]{height:400px!important}" +
-      "[style*=\"padding:28px 40px\"]{padding:16px!important}" +
-      "[style*=\"font-size:38px\"]{font-size:24px!important}" +
-      "body{padding:16px!important}}";
-    document.head.appendChild(s);
-    function patch() {
-      document.querySelectorAll("*").forEach(function(el) {
-        var st = el.getAttribute("style") || "";
-        if (st.indexOf("1fr 1fr") > -1) el.style.gridTemplateColumns = "1fr";
-        if (st.indexOf("460px") > -1) el.style.height = "400px";
-        if (st.indexOf("28px 40px") > -1) el.style.padding = "16px";
-        if (st.indexOf("38px") > -1 && st.indexOf("font-size") > -1) el.style.fontSize = "24px";
+(function() {
+  /* ── Mobile grid fix ── */
+  if (window.innerWidth <= 767) {
+    var mob = document.createElement('style');
+    mob.textContent = [
+      '@media (max-width:767px){',
+      '[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}',
+      '[style*="height:460px"]{height:400px!important}',
+      '[style*="padding:28px 40px"]{padding:16px!important}',
+      '[style*="font-size:38px"]{font-size:24px!important}',
+      'body{padding:16px!important}}'
+    ].join('');
+    document.head.appendChild(mob);
+    function patchInline() {
+      [].forEach.call(document.querySelectorAll('*'), function(el) {
+        var st = el.getAttribute('style') || '';
+        if (st.indexOf('1fr 1fr') > -1)   el.style.gridTemplateColumns = '1fr';
+        if (st.indexOf('460px')  > -1)    el.style.height = '400px';
+        if (st.indexOf('28px 40px') > -1) el.style.padding = '16px';
+        if (st.indexOf('font-size:38px') > -1) el.style.fontSize = '24px';
       });
     }
-    patch(); setTimeout(patch, 300); setTimeout(patch, 1000);
-  })();
-}
+    patchInline();
+    setTimeout(patchInline, 300);
+    setTimeout(patchInline, 1000);
+  }
 
-(function() {
-  var STORE = 'italiano-my-phrases';
-  function load() { try { return JSON.parse(localStorage.getItem(STORE)) || []; } catch(e) { return []; } }
-  function save(arr) { localStorage.setItem(STORE, JSON.stringify(arr)); }
+  /* ── My Phrases feature ── */
+  var STORE = "italiano-my-phrases";
 
-  // ── Inject custom phrases into the scrolling marquee track ──
+  function loadPhrases() {
+    try { return JSON.parse(localStorage.getItem(STORE)) || []; }
+    catch(e) { return []; }
+  }
+  function savePhrases(arr) {
+    localStorage.setItem(STORE, JSON.stringify(arr));
+  }
+  function esc(str) {
+    return String(str || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* speak via data attribute — avoids single-quote escaping in onclick */
+  window.__mpSpeak = function(btn) {
+    var text = btn.getAttribute('data-it');
+    if (!text || !window.speechSynthesis) return;
+    var u = new SpeechSynthesisUtterance(text);
+    u.lang = "it-IT";
+    u.rate = 0.95;
+    speechSynthesis.speak(u);
+  };
+
+  /* ── Sync active phrases into the scrolling marquee ── */
   function syncPhraseBox() {
     var tracks = document.querySelectorAll('.marquee-track');
-    if (!tracks.length) return;
-    var phrases = load();
+    var phrases = loadPhrases();
     tracks.forEach(function(track) {
-      // Remove previously injected custom items
-      track.querySelectorAll('[data-custom-phrase]').forEach(function(el) { el.remove(); });
-      // Add active phrases
+      track.querySelectorAll('[data-cphrase]').forEach(function(el) { el.remove(); });
       phrases.filter(function(p) { return p.active; }).forEach(function(p) {
-        var item = document.createElement('div');
-        item.setAttribute('data-custom-phrase', p.id);
-        item.style.cssText = 'display:flex;align-items:center;gap:12px;background:#1f4242;border-radius:14px;padding:13px 18px;border:1px solid #a4d4c5;';
-        item.innerHTML =
+        var div = document.createElement('div');
+        div.setAttribute('data-cphrase', String(p.id));
+        div.style.cssText = 'display:flex;align-items:center;gap:12px;background:#1f4242;border-radius:14px;padding:13px 18px;border:1px solid rgba(164,212,197,.4);';
+        div.innerHTML =
           '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:4px;">' + esc(p.tag || 'custom') + '</div>' +
+            '<div style="font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:4px;">' + esc(p.tag) + '</div>' +
             '<div style="font-size:17px;font-weight:600;color:#fff;letter-spacing:-.3px;">' + esc(p.it) + '</div>' +
             (p.en ? '<div style="font-size:14px;color:#9fc4ba;margin-top:3px;">' + esc(p.en) + '</div>' : '') +
           '</div>' +
-          '<button aria-label="Play" onclick="(function(t){var u=new SpeechSynthesisUtterance(t);u.lang='it-IT';u.rate=0.95;speechSynthesis.speak(u);})(''+esc(p.it)+'')" style="flex:0 0 auto;width:40px;height:40px;border:none;border-radius:9999px;background:#a4d4c5;color:#10302b;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;">🔊</button>';
-        track.appendChild(item);
+          '<button data-it="' + esc(p.it) + '" onclick="window.__mpSpeak(this)" ' +
+            'style="flex:0 0 auto;width:40px;height:40px;border:none;border-radius:9999px;background:#a4d4c5;color:#10302b;font-size:17px;cursor:pointer;">🔊</button>';
+        track.appendChild(div);
       });
     });
   }
 
-  function esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  /* ── Render the saved-phrase list inside the panel ── */
+  function renderList() {
+    var list = document.getElementById('mph-list');
+    if (!list) return;
+    var phrases = loadPhrases();
+    if (!phrases.length) {
+      list.innerHTML = '<p style="color:#6a6a6a;font-size:14px;padding:8px 4px;">No custom phrases yet. Add one above.</p>';
+      return;
+    }
+    /* group by tag */
+    var tagOrder = [], tags = {};
+    phrases.forEach(function(p) {
+      if (!tags[p.tag]) { tags[p.tag] = []; tagOrder.push(p.tag); }
+      tags[p.tag].push(p);
+    });
+    list.innerHTML = '';
+    tagOrder.forEach(function(tag) {
+      var wrap = document.createElement('div');
+      wrap.style.marginBottom = '14px';
+      wrap.innerHTML = '<div style="font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#6a6a6a;margin-bottom:8px;padding-left:4px;">' + esc(tag) + '</div>';
+      tags[tag].forEach(function(p) {
+        var row = document.createElement('div');
+        var active = p.active;
+        row.style.cssText = 'display:flex;align-items:center;gap:10px;border-radius:14px;padding:11px 14px;margin-bottom:7px;background:' + (active ? '#1a3a3a' : '#f0ece0') + ';';
+        row.innerHTML =
+          '<div style="flex:1;min-width:0;">' +
+            '<div style="font-size:15px;font-weight:600;color:' + (active ? '#fff' : '#0a0a0a') + ';letter-spacing:-.2px;">' + esc(p.it) + '</div>' +
+            (p.en ? '<div style="font-size:13px;color:' + (active ? '#9fc4ba' : '#6a6a6a') + ';margin-top:2px;">' + esc(p.en) + '</div>' : '') +
+          '</div>' +
+          '<button data-toggle="' + p.id + '" style="padding:5px 13px;border:none;border-radius:9999px;background:' + (active ? '#a4d4c5' : '#d0cbbe') + ';color:' + (active ? '#0a2a20' : '#6a6a6a') + ';font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">' + (active ? '● On' : '○ Off') + '</button>' +
+          '<button data-del="' + p.id + '" style="width:30px;height:30px;border:none;border-radius:9999px;background:rgba(0,0,0,.12);color:' + (active ? '#a4d4c5' : '#999') + ';font-size:18px;cursor:pointer;line-height:1;padding:0;">×</button>';
+        wrap.appendChild(row);
+      });
+      list.appendChild(wrap);
+    });
+
+    list.querySelectorAll('[data-toggle]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = Number(btn.getAttribute('data-toggle'));
+        var arr = loadPhrases();
+        arr.forEach(function(p) { if (p.id === id) p.active = !p.active; });
+        savePhrases(arr); renderList(); syncPhraseBox();
+      });
+    });
+    list.querySelectorAll('[data-del]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = Number(btn.getAttribute('data-del'));
+        savePhrases(loadPhrases().filter(function(p) { return p.id !== id; }));
+        renderList(); syncPhraseBox();
+      });
+    });
   }
 
-  // ── Build the My Phrases management panel ──
+  /* ── Build the panel DOM ── */
   function buildPanel() {
-    if (document.getElementById('my-phrases-panel')) return;
+    if (document.getElementById('my-phrases-panel')) { renderList(); return; }
 
     var panel = document.createElement('div');
     panel.id = 'my-phrases-panel';
-    panel.style.cssText = 'max-width:1320px;margin:24px auto 48px;font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;';
+    panel.style.cssText = 'max-width:1320px;margin:28px auto 56px;padding:0 ' + (window.innerWidth <= 767 ? '16px' : '40px') + ';font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;';
+
     panel.innerHTML =
-      // Header row
       '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">' +
-        '<div style="width:32px;height:32px;border-radius:10px;background:#1a3a3a;display:flex;align-items:center;justify-content:center;color:#a4d4c5;font-size:16px;">✍️</div>' +
+        '<div style="width:32px;height:32px;border-radius:10px;background:#1a3a3a;display:flex;align-items:center;justify-content:center;font-size:15px;">✍️</div>' +
         '<h2 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-.5px;color:#0a0a0a;">My Phrases</h2>' +
       '</div>' +
-      // Add form
-      '<div id="mph-form" style="background:#1a3a3a;border-radius:20px;padding:22px 24px;margin-bottom:20px;">' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;flex-wrap:wrap;" id="mph-grid">' +
+      /* form */
+      '<div style="background:#1a3a3a;border-radius:20px;padding:20px 22px;margin-bottom:18px;">' +
+        '<div id="mph-fields" style="display:grid;gap:10px;margin-bottom:14px;">' +
           '<div>' +
-            '<label style="display:block;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:6px;">Italian</label>' +
-            '<input id="mph-it" placeholder="e.g. Buongiorno" style="width:100%;padding:10px 14px;border:none;border-radius:12px;background:#1f4242;color:#fff;font-size:15px;font-family:inherit;outline:none;" />' +
+            '<label style="display:block;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:5px;">Italian *</label>' +
+            '<input id="mph-it" placeholder="e.g. Buongiorno" style="width:100%;box-sizing:border-box;padding:10px 13px;border:none;border-radius:11px;background:#1f4242;color:#fff;font-size:15px;font-family:inherit;outline:none;" />' +
           '</div>' +
           '<div>' +
-            '<label style="display:block;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:6px;">English (optional)</label>' +
-            '<input id="mph-en" placeholder="e.g. Good morning" style="width:100%;padding:10px 14px;border:none;border-radius:12px;background:#1f4242;color:#fff;font-size:15px;font-family:inherit;outline:none;" />' +
+            '<label style="display:block;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:5px;">English (optional)</label>' +
+            '<input id="mph-en" placeholder="e.g. Good morning" style="width:100%;box-sizing:border-box;padding:10px 13px;border:none;border-radius:11px;background:#1f4242;color:#fff;font-size:15px;font-family:inherit;outline:none;" />' +
           '</div>' +
-          '<div style="display:flex;gap:10px;align-items:flex-end;">' +
+          '<div style="display:flex;gap:10px;">' +
             '<div style="flex:1;">' +
-              '<label style="display:block;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:6px;">Tag</label>' +
-              '<input id="mph-tag" placeholder="e.g. greetings" style="width:100%;padding:10px 14px;border:none;border-radius:12px;background:#1f4242;color:#fff;font-size:15px;font-family:inherit;outline:none;" />' +
+              '<label style="display:block;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:5px;">Tag</label>' +
+              '<input id="mph-tag" placeholder="e.g. greetings" style="width:100%;box-sizing:border-box;padding:10px 13px;border:none;border-radius:11px;background:#1f4242;color:#fff;font-size:15px;font-family:inherit;outline:none;" />' +
             '</div>' +
-            '<button id="mph-add" style="height:42px;padding:0 20px;border:none;border-radius:12px;background:#a4d4c5;color:#0a2a20;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;">+ Add</button>' +
+            '<div style="display:flex;align-items:flex-end;">' +
+              '<button id="mph-add" style="height:42px;padding:0 20px;border:none;border-radius:11px;background:#a4d4c5;color:#0a2a20;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>' +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
-      // Phrase list
       '<div id="mph-list"></div>';
 
-    // Insert below bento grid
-    var bentoGrid = null;
-    document.querySelectorAll('div').forEach(function(el) {
+    /* insert after bento grid */
+    var bento = null;
+    [].forEach.call(document.querySelectorAll('div'), function(el) {
       var st = el.getAttribute('style') || '';
-      if (st.indexOf('grid-template-columns') > -1 && st.indexOf('1fr') > -1 && st.indexOf('gap:24px') > -1) {
-        bentoGrid = el;
-      }
+      if (st.indexOf('grid-template-columns') > -1 && st.indexOf('gap:24px') > -1) bento = el;
     });
-    if (bentoGrid && bentoGrid.parentNode) {
-      bentoGrid.parentNode.insertBefore(panel, bentoGrid.nextSibling);
+    if (bento && bento.parentNode) {
+      bento.parentNode.insertBefore(panel, bento.nextSibling);
     } else {
       document.body.appendChild(panel);
     }
 
-    // Mobile: stack form fields
-    if (window.innerWidth <= 767) {
-      document.getElementById('mph-grid').style.gridTemplateColumns = '1fr';
-    }
-
     renderList();
 
-    // Add button handler
     document.getElementById('mph-add').addEventListener('click', function() {
-      var it = document.getElementById('mph-it').value.trim();
-      var en = document.getElementById('mph-en').value.trim();
-      var tag = document.getElementById('mph-tag').value.trim() || 'custom';
+      var it  = document.getElementById('mph-it').value.trim();
+      var en  = document.getElementById('mph-en').value.trim();
+      var tag = (document.getElementById('mph-tag').value.trim()) || 'custom';
       if (!it) { document.getElementById('mph-it').focus(); return; }
-      var phrases = load();
-      phrases.push({ id: Date.now(), it: it, en: en, tag: tag, active: true });
-      save(phrases);
+      var arr = loadPhrases();
+      arr.push({ id: Date.now(), it: it, en: en, tag: tag, active: true });
+      savePhrases(arr);
       document.getElementById('mph-it').value = '';
       document.getElementById('mph-en').value = '';
       document.getElementById('mph-tag').value = '';
-      renderList();
-      syncPhraseBox();
+      renderList(); syncPhraseBox();
     });
-
-    // Enter key in inputs
     ['mph-it','mph-en','mph-tag'].forEach(function(id) {
       document.getElementById(id).addEventListener('keydown', function(e) {
         if (e.key === 'Enter') document.getElementById('mph-add').click();
@@ -268,76 +329,7 @@ if (window.innerWidth <= 767) {
     });
   }
 
-  function renderList() {
-    var list = document.getElementById('mph-list');
-    if (!list) return;
-    var phrases = load();
-    if (!phrases.length) {
-      list.innerHTML = '<p style="color:#6a6a6a;font-size:14px;text-align:center;padding:12px 0;">No custom phrases yet. Add one above.</p>';
-      return;
-    }
-    list.innerHTML = '';
-
-    // Group by tag
-    var tags = {};
-    phrases.forEach(function(p) {
-      if (!tags[p.tag]) tags[p.tag] = [];
-      tags[p.tag].push(p);
-    });
-
-    Object.keys(tags).forEach(function(tag) {
-      var group = document.createElement('div');
-      group.style.cssText = 'margin-bottom:16px;';
-      group.innerHTML = '<div style="font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#6a6a6a;margin-bottom:8px;padding-left:4px;">' + esc(tag) + '</div>';
-      var items = document.createElement('div');
-      items.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
-
-      tags[tag].forEach(function(p) {
-        var row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;gap:12px;background:' + (p.active ? '#1a3a3a' : '#f0ece0') + ';border-radius:14px;padding:12px 16px;transition:background .2s;';
-        row.innerHTML =
-          '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:15px;font-weight:600;color:' + (p.active ? '#fff' : '#0a0a0a') + ';letter-spacing:-.2px;">' + esc(p.it) + '</div>' +
-            (p.en ? '<div style="font-size:13px;color:' + (p.active ? '#9fc4ba' : '#6a6a6a') + ';margin-top:2px;">' + esc(p.en) + '</div>' : '') +
-          '</div>' +
-          // Toggle button
-          '<button data-toggle="'+p.id+'" title="' + (p.active ? 'Remove from Phrases box' : 'Add to Phrases box') + '" style="flex:0 0 auto;padding:6px 14px;border:none;border-radius:9999px;background:' + (p.active ? '#a4d4c5' : '#d0cbbe') + ';color:' + (p.active ? '#0a2a20' : '#6a6a6a') + ';font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">' + (p.active ? '● On' : '○ Off') + '</button>' +
-          // Delete button
-          '<button data-del="'+p.id+'" title="Delete" style="flex:0 0 auto;width:32px;height:32px;border:none;border-radius:9999px;background:rgba(0,0,0,.1);color:' + (p.active ? '#a4d4c5' : '#999') + ';font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">×</button>';
-        items.appendChild(row);
-      });
-
-      group.appendChild(items);
-      list.appendChild(group);
-    });
-
-    // Wire up toggle and delete
-    list.querySelectorAll('[data-toggle]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var id = Number(btn.getAttribute('data-toggle'));
-        var phrases = load();
-        phrases.forEach(function(p) { if (p.id === id) p.active = !p.active; });
-        save(phrases);
-        renderList();
-        syncPhraseBox();
-      });
-    });
-    list.querySelectorAll('[data-del]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var id = Number(btn.getAttribute('data-del'));
-        var phrases = load().filter(function(p) { return p.id !== id; });
-        save(phrases);
-        renderList();
-        syncPhraseBox();
-      });
-    });
-  }
-
-  // Run after custom element renders
-  function init() {
-    buildPanel();
-    syncPhraseBox();
-  }
+  function init() { buildPanel(); syncPhraseBox(); }
   setTimeout(init, 400);
   setTimeout(init, 1200);
 })();
