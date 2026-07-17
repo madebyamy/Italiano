@@ -131,11 +131,6 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.documentElement.replaceWith(doc.documentElement);
 
 (function() {
-  var SUPA_URL = "https://uavrwxzoxgbcrrbwiajk.supabase.co";
-  var SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVhdnJ3eHpveGdiY3JyYndpYWprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTExNzgsImV4cCI6MjA5ODIyNzE3OH0._Ug3f6SVJlaBuxs351xL4GJ6rF4cXy8zA-Sb-4xyRag";
-  var sb = null; // supabase client, set after load
-  var currentUser = null;
-
   /* ── helpers ── */
   function esc(s) {
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -143,19 +138,23 @@ document.addEventListener('DOMContentLoaded', async function() {
   function loadLocal(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch(e) { return []; } }
   function saveLocal(k,v) { localStorage.setItem(k, JSON.stringify(v)); }
 
-  /* ── Mobile grid fix ── */
+  /* ── Mobile CSS ── */
   (function() {
-    var mob = document.createElement('style');
-    mob.textContent = '@media (max-width:767px){' +
-      'html,body{max-width:100vw!important;overflow-x:hidden!important}' +
-      'body>*{max-width:100vw!important}' +
-      '[style*="1fr 1fr"]{grid-template-columns:1fr!important}' +
-      '[style*="460px"]{height:auto!important;min-height:320px!important}' +
-      '[style*="28px 40px"],[style*="padding: 28px 40px"]{padding:16px!important}' +
-      '[style*="font-size: 38px"],[style*="font-size:38px"]{font-size:24px!important}' +
-      '[style*="1320px"]{padding-left:16px!important;padding-right:16px!important}' +
-      '#my-row{grid-template-columns:1fr!important}}';
-    document.head.appendChild(mob);
+    var s = document.createElement('style');
+    s.textContent =
+      '@media (max-width:900px){' +
+        'html,body{max-width:100vw!important;overflow-x:hidden!important}' +
+        '[style*="1fr 1fr"]{grid-template-columns:1fr!important}' +
+        '[style*="460px"]{height:auto!important;min-height:auto!important}' +
+        '[style*="28px 40px"],[style*="padding: 28px 40px"]{padding:16px!important}' +
+        '[style*="font-size: 38px"],[style*="font-size:38px"]{font-size:24px!important}' +
+        '[style*="1320px"]{padding-left:16px!important;padding-right:16px!important}' +
+        '#my-row{display:none!important}' +
+      '}' +
+      '#my-fc-slot,#my-ph-slot{width:100%;box-sizing:border-box;}' +
+      /* hide S2/S3/S4 season buttons */
+      '.s234-hide{display:none!important}';
+    document.head.appendChild(s);
     function patchInline() {
       [].forEach.call(document.querySelectorAll('*'), function(el) {
         var st = el.getAttribute('style') || '';
@@ -166,7 +165,7 @@ document.addEventListener('DOMContentLoaded', async function() {
       });
       document.body.style.overflowX = 'hidden';
     }
-    if (window.innerWidth <= 767) {
+    if (window.innerWidth <= 900) {
       patchInline(); setTimeout(patchInline, 300); setTimeout(patchInline, 1000);
     }
   })();
@@ -175,377 +174,262 @@ document.addEventListener('DOMContentLoaded', async function() {
   window.__mpSpeak = function(btn) {
     var text = btn.getAttribute('data-it');
     if (!text || !window.speechSynthesis) return;
-    var u = new SpeechSynthesisUtterance(text);
-    u.lang = 'it-IT'; u.rate = 0.95;
+    var u = new SpeechSynthesisUtterance(text); u.lang = 'it-IT'; u.rate = 0.95;
     speechSynthesis.speak(u);
   };
 
-  /* ════════════════════════════
-     DATA LAYER — local + cloud
-  ════════════════════════════ */
+  /* ── DATA (localStorage only) ── */
   var PH_KEY = 'italiano-my-phrases';
   var FC_KEY = 'italiano-my-flashcards';
 
-  /* Load from Supabase if logged in, else localStorage */
-  function loadPhrases(cb) {
-    if (sb && currentUser) {
-      sb.from('phrases').select('*').order('created_at').then(function(res) {
-        if (res.error) { cb(loadLocal(PH_KEY)); return; }
-        var arr = res.data.map(function(r) {
-          return { id: r.id, it: r.it, en: r.en||'', tag: r.tag||'custom', active: r.active };
-        });
-        saveLocal(PH_KEY, arr);
-        cb(arr);
-      });
-    } else { cb(loadLocal(PH_KEY)); }
-  }
+  function loadPhrases(cb) { cb(loadLocal(PH_KEY)); }
+  function loadCards(cb) { cb(loadLocal(FC_KEY)); }
+  function addPhrase(p, cb) { var a=loadLocal(PH_KEY); p.id=Date.now(); p.active=true; a.push(p); saveLocal(PH_KEY,a); cb(p); }
+  function addCard(c, cb) { var a=loadLocal(FC_KEY); c.id=Date.now(); c.active=true; a.push(c); saveLocal(FC_KEY,a); cb(c); }
+  function togglePhrase(id,active,cb){ var a=loadLocal(PH_KEY); a.forEach(function(p){if(p.id==id)p.active=active;}); saveLocal(PH_KEY,a); cb(); }
+  function toggleCard(id,active,cb){ var a=loadLocal(FC_KEY); a.forEach(function(c){if(c.id==id)c.active=active;}); saveLocal(FC_KEY,a); cb(); }
+  function deletePhrase(id,cb){ saveLocal(PH_KEY,loadLocal(PH_KEY).filter(function(p){return p.id!=id;})); cb(); }
+  function deleteCard(id,cb){ saveLocal(FC_KEY,loadLocal(FC_KEY).filter(function(c){return c.id!=id;})); cb(); }
+  function updatePhrase(id,ch,cb){ var a=loadLocal(PH_KEY); a.forEach(function(p){if(p.id==id)Object.assign(p,ch);}); saveLocal(PH_KEY,a); cb(); }
+  function updateCard(id,ch,cb){ var a=loadLocal(FC_KEY); a.forEach(function(c){if(c.id==id)Object.assign(c,ch);}); saveLocal(FC_KEY,a); cb(); }
 
-  function loadCards(cb) {
-    if (sb && currentUser) {
-      sb.from('flashcards').select('*').order('created_at').then(function(res) {
-        if (res.error) { cb(loadLocal(FC_KEY)); return; }
-        var arr = res.data.map(function(r) {
-          return { id: r.id, it: r.it, en: r.en, ex: r.ex||'', tag: r.tag||'custom', active: r.active };
-        });
-        saveLocal(FC_KEY, arr);
-        cb(arr);
-      });
-    } else { cb(loadLocal(FC_KEY)); }
-  }
-
-  function addPhrase(p, cb) {
-    if (sb && currentUser) {
-      sb.from('phrases').insert({ user_id: currentUser.id, it: p.it, en: p.en, tag: p.tag, active: true }).select().then(function(res) {
-        cb(res.error ? null : res.data[0]);
-      });
-    } else {
-      var arr = loadLocal(PH_KEY);
-      p.id = Date.now(); p.active = true;
-      arr.push(p); saveLocal(PH_KEY, arr); cb(p);
-    }
-  }
-
-  function addCard(c, cb) {
-    if (sb && currentUser) {
-      sb.from('flashcards').insert({ user_id: currentUser.id, it: c.it, en: c.en, ex: c.ex, tag: c.tag, active: true }).select().then(function(res) {
-        cb(res.error ? null : res.data[0]);
-      });
-    } else {
-      var arr = loadLocal(FC_KEY);
-      c.id = Date.now(); c.active = true;
-      arr.push(c); saveLocal(FC_KEY, arr); cb(c);
-    }
-  }
-
-  function togglePhrase(id, active, cb) {
-    if (sb && currentUser) {
-      sb.from('phrases').update({ active: active }).eq('id', id).then(function() { cb(); });
-    } else {
-      var arr = loadLocal(PH_KEY);
-      arr.forEach(function(p) { if (p.id == id) p.active = active; });
-      saveLocal(PH_KEY, arr); cb();
-    }
-  }
-
-  function toggleCard(id, active, cb) {
-    if (sb && currentUser) {
-      sb.from('flashcards').update({ active: active }).eq('id', id).then(function() { cb(); });
-    } else {
-      var arr = loadLocal(FC_KEY);
-      arr.forEach(function(c) { if (c.id == id) c.active = active; });
-      saveLocal(FC_KEY, arr); cb();
-    }
-  }
-
-  function deletePhrase(id, cb) {
-    if (sb && currentUser) {
-      sb.from('phrases').delete().eq('id', id).then(function() { cb(); });
-    } else {
-      saveLocal(PH_KEY, loadLocal(PH_KEY).filter(function(p) { return p.id != id; })); cb();
-    }
-  }
-
-  function deleteCard(id, cb) {
-    if (sb && currentUser) {
-      sb.from('flashcards').delete().eq('id', id).then(function() { cb(); });
-    } else {
-      saveLocal(FC_KEY, loadLocal(FC_KEY).filter(function(c) { return c.id != id; })); cb();
-    }
-  }
-
-  /* Migrate localStorage to Supabase on first login */
-  function migrateIfNeeded() {
-    var localPhrases = loadLocal(PH_KEY);
-    var localCards   = loadLocal(FC_KEY);
-    if (localPhrases.length) {
-      var rows = localPhrases.map(function(p) {
-        return { user_id: currentUser.id, it: p.it, en: p.en||'', tag: p.tag||'custom', active: p.active !== false };
-      });
-      sb.from('phrases').insert(rows).then(function() {
-        saveLocal(PH_KEY, []);
-        refreshAll();
-      });
-    }
-    if (localCards.length) {
-      var crows = localCards.map(function(c) {
-        return { user_id: currentUser.id, it: c.it, en: c.en, ex: c.ex||'', tag: c.tag||'custom', active: c.active !== false };
-      });
-      sb.from('flashcards').insert(crows).then(function() {
-        saveLocal(FC_KEY, []);
-        refreshAll();
-      });
-    }
-  }
-
-  /* ════════════════════════════
-     PHRASES UI
-  ════════════════════════════ */
+  /* ── PHRASES UI ── */
   function syncPhraseBox(phrases) {
     var tracks = document.querySelectorAll('.marquee-track');
     tracks.forEach(function(track) {
-      track.querySelectorAll('[data-cphrase]').forEach(function(el) { el.remove(); });
-      phrases.filter(function(p) { return p.active; }).forEach(function(p) {
+      track.querySelectorAll('[data-cphrase]').forEach(function(el){el.remove();});
+      phrases.filter(function(p){return p.active;}).forEach(function(p) {
         var div = document.createElement('div');
         div.setAttribute('data-cphrase', String(p.id));
         div.style.cssText = 'display:flex;align-items:center;gap:12px;background:#1f4242;border-radius:14px;padding:13px 18px;border:1px solid rgba(164,212,197,.4);';
-        div.innerHTML =
-          '<div style="flex:1;min-width:0;">' +
-            '<div style="font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:4px;">' + esc(p.tag) + '</div>' +
-            '<div style="font-size:17px;font-weight:600;color:#fff;letter-spacing:-.3px;">' + esc(p.it) + '</div>' +
-            (p.en ? '<div style="font-size:14px;color:#9fc4ba;margin-top:3px;">' + esc(p.en) + '</div>' : '') +
-          '</div>' +
-          '<button data-it="' + esc(p.it) + '" onclick="window.__mpSpeak(this)" style="flex:0 0 auto;width:40px;height:40px;border:none;border-radius:9999px;background:#a4d4c5;color:#10302b;font-size:17px;cursor:pointer;">🔊</button>';
+        div.innerHTML = '<div style="flex:1;min-width:0;"><div style="font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#a4d4c5;margin-bottom:4px;">'+esc(p.tag)+'</div><div style="font-size:17px;font-weight:600;color:#fff;letter-spacing:-.3px;">'+esc(p.it)+'</div>'+(p.en?'<div style="font-size:14px;color:#9fc4ba;margin-top:3px;">'+esc(p.en)+'</div>':'')+'</div>'+'<button data-it="'+esc(p.it)+'" onclick="window.__mpSpeak(this)" style="flex:0 0 auto;width:40px;height:40px;border:none;border-radius:9999px;background:#a4d4c5;color:#10302b;font-size:17px;cursor:pointer;">🔊</button>';
         track.appendChild(div);
       });
     });
+    /* cap phrase list height so only ~10 rows show at once */
+    tracks.forEach(function(track){
+      var wrap = track.parentNode;
+      if (wrap && !wrap.__phCapped) {
+        wrap.style.maxHeight = '640px';
+        wrap.style.overflowY = 'auto';
+        wrap.style.overflowX = 'hidden';
+        wrap.__phCapped = true;
+      }
+    });
   }
 
+  var phEditId = null;
   function renderPhraseList(container, phrases) {
-    if (!phrases.length) {
-      container.innerHTML = '<p style="color:#a4d4c5;font-size:13px;text-align:center;padding:12px 0;opacity:.7;">No custom phrases yet.</p>';
-      return;
-    }
+    if (!phrases.length) { container.innerHTML='<p style="color:#a4d4c5;font-size:13px;text-align:center;padding:12px 0;opacity:.7;">No custom phrases yet.</p>'; return; }
     container.innerHTML = '';
     phrases.forEach(function(p) {
-      var active = p.active;
+      var isEditing = (phEditId == p.id), active = p.active;
       var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;border-radius:12px;padding:10px 12px;margin-bottom:6px;background:' + (active ? '#1f4242' : 'rgba(255,255,255,.06)') + ';';
-      row.innerHTML =
-        '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#a4d4c5;margin-bottom:2px;opacity:.8;">' + esc(p.tag) + '</div>' +
-          '<div style="font-size:14px;font-weight:600;color:#fff;">' + esc(p.it) + '</div>' +
-          (p.en ? '<div style="font-size:12px;color:#9fc4ba;">' + esc(p.en) + '</div>' : '') +
-        '</div>' +
-        '<button data-ptoggle="' + esc(String(p.id)) + '" data-active="' + (active?'1':'0') + '" style="padding:4px 11px;border:none;border-radius:9999px;background:' + (active ? '#a4d4c5' : 'rgba(255,255,255,.15)') + ';color:' + (active ? '#0a2a20' : '#a4d4c5') + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' + (active ? '● On' : '○ Off') + '</button>' +
-        '<button data-pdel="' + esc(String(p.id)) + '" style="width:26px;height:26px;border:none;border-radius:9999px;background:rgba(255,255,255,.1);color:#a4d4c5;font-size:16px;cursor:pointer;padding:0;line-height:1;">×</button>';
+      row.style.cssText = 'border-radius:12px;padding:10px 12px;margin-bottom:6px;background:'+(active?'#1f4242':'rgba(255,255,255,.06)')+';';
+      if (isEditing) {
+        row.innerHTML =
+          '<input data-peit="'+p.id+'" value="'+esc(p.it)+'" placeholder="Italian *" style="display:block;width:100%;box-sizing:border-box;padding:6px 9px;border:none;border-radius:8px;background:#0e2e2e;color:#fff;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;" />'+
+          '<input data-peen="'+p.id+'" value="'+esc(p.en||'')+'" placeholder="English" style="display:block;width:100%;box-sizing:border-box;padding:6px 9px;border:none;border-radius:8px;background:#0e2e2e;color:#fff;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;" />'+
+          '<div style="display:flex;gap:6px;">'+
+            '<input data-petag="'+p.id+'" value="'+esc(p.tag||'')+'" placeholder="Tag" style="flex:1;padding:6px 9px;border:none;border-radius:8px;background:#0e2e2e;color:#fff;font-size:13px;font-family:inherit;outline:none;" />'+
+            '<button data-pesave="'+p.id+'" style="padding:0 12px;border:none;border-radius:8px;background:#a4d4c5;color:#0a2a20;font-size:12px;font-weight:700;cursor:pointer;">Save</button>'+
+            '<button data-pecancel style="padding:0 10px;border:none;border-radius:8px;background:rgba(255,255,255,.15);color:#a4d4c5;font-size:12px;cursor:pointer;">&#x2715;</button>'+
+          '</div>';
+      } else {
+        row.innerHTML =
+          '<div style="display:flex;align-items:center;gap:8px;">'+
+            '<div style="flex:1;min-width:0;"><div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#a4d4c5;margin-bottom:2px;opacity:.8;">'+esc(p.tag)+'</div><div style="font-size:14px;font-weight:600;color:#fff;">'+esc(p.it)+'</div>'+(p.en?'<div style="font-size:12px;color:#9fc4ba;">'+esc(p.en)+'</div>':'')+'</div>'+
+            '<button data-pedit="'+p.id+'" style="width:28px;height:28px;border:none;border-radius:9999px;background:rgba(255,255,255,.1);color:#a4d4c5;font-size:13px;cursor:pointer;padding:0;line-height:1;">&#x270F;</button>'+
+            '<button data-ptoggle="'+p.id+'" data-active="'+(active?'1':'0')+'" style="padding:4px 10px;border:none;border-radius:9999px;background:'+(active?'#a4d4c5':'rgba(255,255,255,.15)')+';color:'+(active?'#0a2a20':'#a4d4c5')+';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">'+(active?'&#x25CF; On':'&#x25CB; Off')+'</button>'+
+            '<button data-pdel="'+p.id+'" style="width:28px;height:28px;border:none;border-radius:9999px;background:rgba(255,255,255,.1);color:#a4d4c5;font-size:16px;cursor:pointer;padding:0;line-height:1;">&times;</button>'+
+          '</div>';
+      }
       container.appendChild(row);
     });
-    container.querySelectorAll('[data-ptoggle]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var id = btn.getAttribute('data-ptoggle');
-        var nowActive = btn.getAttribute('data-active') === '0';
-        togglePhrase(id, nowActive, function() { refreshPhrases(); });
-      });
-    });
-    container.querySelectorAll('[data-pdel]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        deletePhrase(btn.getAttribute('data-pdel'), function() { refreshPhrases(); });
-      });
-    });
+    container.querySelectorAll('[data-pedit]').forEach(function(b){ b.addEventListener('click',function(){ phEditId=b.getAttribute('data-pedit'); refreshPhrases(); }); });
+    container.querySelectorAll('[data-pesave]').forEach(function(b){ b.addEventListener('click',function(){
+      var id=b.getAttribute('data-pesave');
+      var it=container.querySelector('[data-peit="'+id+'"]').value.trim();
+      var en=container.querySelector('[data-peen="'+id+'"]').value.trim();
+      var tag=container.querySelector('[data-petag="'+id+'"]').value.trim()||'custom';
+      if(!it)return; updatePhrase(id,{it:it,en:en,tag:tag},function(){ phEditId=null; refreshPhrases(); });
+    }); });
+    container.querySelectorAll('[data-pecancel]').forEach(function(b){ b.addEventListener('click',function(){ phEditId=null; refreshPhrases(); }); });
+    container.querySelectorAll('[data-ptoggle]').forEach(function(b){ b.addEventListener('click',function(){ togglePhrase(b.getAttribute('data-ptoggle'),b.getAttribute('data-active')==='0',function(){ refreshPhrases(); }); }); });
+    container.querySelectorAll('[data-pdel]').forEach(function(b){ b.addEventListener('click',function(){ deletePhrase(b.getAttribute('data-pdel'),function(){ refreshPhrases(); }); }); });
   }
 
   function refreshPhrases() {
-    loadPhrases(function(arr) {
-      var list = document.getElementById('mph-list');
-      if (list) renderPhraseList(list, arr);
-      syncPhraseBox(arr);
-    });
+    loadPhrases(function(arr){ var l=document.getElementById('mph-list'); if(l) renderPhraseList(l,arr); syncPhraseBox(arr); });
   }
 
-  /* ════════════════════════════
-     FLASHCARDS UI
-  ════════════════════════════ */
-  var fcIndex = 0, fcFlipped = false;
+  /* ── FLASHCARDS UI ── */
+  var fcIndex=0, fcFlipped=false, fcEditId=null;
 
   function renderFlipCard(cards) {
-    var display = document.getElementById('mfc-card-display');
-    var counter  = document.getElementById('mfc-counter');
-    if (!display) return;
-    var active = cards.filter(function(c) { return c.active; });
-    if (!active.length) {
-      fcIndex = 0; fcFlipped = false;
-      display.innerHTML = '<div style="color:#9a86d0;font-size:13px;text-align:center;opacity:.8;padding:20px 0;">Toggle cards on to practice.</div>';
-      if (counter) counter.textContent = '0 / 0';
-      return;
-    }
-    if (fcIndex >= active.length) fcIndex = 0;
-    var c = active[fcIndex];
-    if (counter) counter.textContent = (fcIndex+1) + ' / ' + active.length;
-    display.innerHTML =
-      '<div style="position:relative;width:100%;height:160px;cursor:pointer;perspective:800px;" onclick="window.__mfcFlip()">' +
-        '<div id="mfc-front" style="position:absolute;inset:0;background:#fffaf0;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-shadow:0 6px 20px rgba(42,37,64,.18);backface-visibility:hidden;transition:transform .45s;">' +
-          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#b8a4ed;margin-bottom:8px;">Italiano</div>' +
-          '<div style="font-size:22px;font-weight:700;color:#0a0a0a;text-align:center;letter-spacing:-.5px;">' + esc(c.it) + '</div>' +
-          '<div style="font-size:12px;color:#9a86d0;margin-top:10px;">tap to reveal</div>' +
-        '</div>' +
-        '<div id="mfc-back" style="position:absolute;inset:0;background:#2a2540;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-shadow:0 6px 20px rgba(42,37,64,.18);backface-visibility:hidden;transform:rotateY(180deg);transition:transform .45s;">' +
-          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#b8a4ed;margin-bottom:8px;">English</div>' +
-          '<div style="font-size:20px;font-weight:600;color:#fff;text-align:center;">' + esc(c.en) + '</div>' +
-          (c.ex ? '<div style="font-size:12px;color:#c4b8e8;margin-top:8px;text-align:center;font-style:italic;">' + esc(c.ex) + '</div>' : '') +
-        '</div>' +
+    var display=document.getElementById('mfc-card-display'), counter=document.getElementById('mfc-counter');
+    if(!display)return;
+    var active=cards.filter(function(c){return c.active;});
+    if(!active.length){ fcIndex=0; fcFlipped=false; display.innerHTML='<div style="color:#9a86d0;font-size:13px;text-align:center;opacity:.8;padding:20px 0;">Toggle cards on to practice.</div>'; if(counter)counter.textContent='0 / 0'; return; }
+    if(fcIndex>=active.length)fcIndex=0;
+    var c=active[fcIndex];
+    if(counter)counter.textContent=(fcIndex+1)+' / '+active.length;
+    display.innerHTML=
+      '<div style="position:relative;width:100%;height:160px;cursor:pointer;perspective:800px;" onclick="window.__mfcFlip()">'+
+        '<div id="mfc-front" style="position:absolute;inset:0;background:#fffaf0;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-shadow:0 6px 20px rgba(42,37,64,.18);backface-visibility:hidden;transition:transform .45s;">'+
+          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#b8a4ed;margin-bottom:8px;">Italiano</div>'+
+          '<div style="font-size:22px;font-weight:700;color:#0a0a0a;text-align:center;letter-spacing:-.5px;">'+esc(c.it)+'</div>'+
+          '<div style="font-size:12px;color:#9a86d0;margin-top:10px;">tap to reveal</div>'+
+        '</div>'+
+        '<div id="mfc-back" style="position:absolute;inset:0;background:#2a2540;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-shadow:0 6px 20px rgba(42,37,64,.18);backface-visibility:hidden;transform:rotateY(180deg);transition:transform .45s;">'+
+          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#b8a4ed;margin-bottom:8px;">English</div>'+
+          '<div style="font-size:20px;font-weight:600;color:#fff;text-align:center;">'+esc(c.en)+'</div>'+
+          (c.ex?'<div style="font-size:12px;color:#c4b8e8;margin-top:8px;text-align:center;font-style:italic;">'+esc(c.ex)+'</div>':'')+
+        '</div>'+
       '</div>';
-    if (fcFlipped) {
-      var f = document.getElementById('mfc-front'), b = document.getElementById('mfc-back');
-      if (f) f.style.transform = 'rotateY(-180deg)';
-      if (b) b.style.transform = 'rotateY(0deg)';
-    }
+    if(fcFlipped){ var f=document.getElementById('mfc-front'),b=document.getElementById('mfc-back'); if(f)f.style.transform='rotateY(-180deg)'; if(b)b.style.transform='rotateY(0deg)'; }
   }
 
-  window.__mfcFlip = function() {
-    fcFlipped = !fcFlipped;
-    var f = document.getElementById('mfc-front'), b = document.getElementById('mfc-back');
-    if (f) f.style.transform = fcFlipped ? 'rotateY(-180deg)' : '';
-    if (b) b.style.transform  = fcFlipped ? 'rotateY(0deg)'   : 'rotateY(180deg)';
-  };
+  window.__mfcFlip=function(){ fcFlipped=!fcFlipped; var f=document.getElementById('mfc-front'),b=document.getElementById('mfc-back'); if(f)f.style.transform=fcFlipped?'rotateY(-180deg)':''; if(b)b.style.transform=fcFlipped?'rotateY(0deg)':'rotateY(180deg)'; };
 
   function refreshCards(delta) {
-    loadCards(function(arr) {
-      var active = arr.filter(function(c) { return c.active; });
-      if (delta !== undefined) {
-        fcFlipped = false;
-        if (delta === 999) { fcIndex = Math.floor(Math.random()*Math.max(active.length,1)); }
-        else { fcIndex = (fcIndex + delta + Math.max(active.length,1)) % Math.max(active.length,1); }
-      }
-      renderFlipCard(arr);
-      var list = document.getElementById('mfc-list');
-      if (list) renderCardList(list, arr);
+    loadCards(function(arr){
+      var active=arr.filter(function(c){return c.active;});
+      if(delta!==undefined){ fcFlipped=false; if(delta===999){fcIndex=Math.floor(Math.random()*Math.max(active.length,1));}else{fcIndex=(fcIndex+delta+Math.max(active.length,1))%Math.max(active.length,1);} }
+      renderFlipCard(arr); var l=document.getElementById('mfc-list'); if(l)renderCardList(l,arr);
     });
   }
+  window.__mfcPrev=function(){refreshCards(-1);}; window.__mfcNext=function(){refreshCards(1);}; window.__mfcShuffle=function(){refreshCards(999);};
 
-  window.__mfcPrev     = function() { refreshCards(-1); };
-  window.__mfcNext     = function() { refreshCards(1); };
-  window.__mfcShuffle  = function() { refreshCards(999); };
-
-  function renderCardList(container, cards) {
-    if (!cards.length) {
-      container.innerHTML = '<p style="color:#9a86d0;font-size:13px;text-align:center;padding:12px 0;opacity:.7;">No custom flashcards yet.</p>';
-      return;
-    }
-    container.innerHTML = '';
-    cards.forEach(function(c) {
-      var active = c.active;
-      var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;gap:8px;border-radius:12px;padding:10px 12px;margin-bottom:6px;background:' + (active ? 'rgba(255,255,255,.14)' : 'rgba(255,255,255,.05)') + ';';
-      row.innerHTML =
-        '<div style="flex:1;min-width:0;">' +
-          '<div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#b8a4ed;margin-bottom:2px;opacity:.8;">' + esc(c.tag) + '</div>' +
-          '<div style="font-size:14px;font-weight:600;color:#fff;">' + esc(c.it) + '</div>' +
-          '<div style="font-size:12px;color:#c4b8e8;">' + esc(c.en) + '</div>' +
-        '</div>' +
-        '<button data-fctoggle="' + esc(String(c.id)) + '" data-active="' + (active?'1':'0') + '" style="padding:4px 11px;border:none;border-radius:9999px;background:' + (active ? '#b8a4ed' : 'rgba(255,255,255,.15)') + ';color:' + (active ? '#1a1030' : '#b8a4ed') + ';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">' + (active ? '● On' : '○ Off') + '</button>' +
-        '<button data-fcdel="' + esc(String(c.id)) + '" style="width:26px;height:26px;border:none;border-radius:9999px;background:rgba(255,255,255,.1);color:#b8a4ed;font-size:16px;cursor:pointer;padding:0;line-height:1;">×</button>';
+  function renderCardList(container,cards){
+    if(!cards.length){ container.innerHTML='<p style="color:#9a86d0;font-size:13px;text-align:center;padding:12px 0;opacity:.7;">No custom flashcards yet.</p>'; return; }
+    container.innerHTML='';
+    cards.forEach(function(c){
+      var isEditing=(fcEditId==c.id), active=c.active;
+      var row=document.createElement('div');
+      row.style.cssText='border-radius:12px;padding:10px 12px;margin-bottom:6px;background:'+(active?'rgba(255,255,255,.14)':'rgba(255,255,255,.05)')+';';
+      if(isEditing){
+        row.innerHTML=
+          '<input data-fceit="'+c.id+'" value="'+esc(c.it)+'" placeholder="Italian *" style="display:block;width:100%;box-sizing:border-box;padding:6px 9px;border:none;border-radius:8px;background:rgba(255,255,255,.2);color:#fff;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;" />'+
+          '<input data-fceen="'+c.id+'" value="'+esc(c.en)+'" placeholder="English *" style="display:block;width:100%;box-sizing:border-box;padding:6px 9px;border:none;border-radius:8px;background:rgba(255,255,255,.2);color:#fff;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;" />'+
+          '<input data-fceex="'+c.id+'" value="'+esc(c.ex||'')+'" placeholder="Example" style="display:block;width:100%;box-sizing:border-box;padding:6px 9px;border:none;border-radius:8px;background:rgba(255,255,255,.2);color:#fff;font-size:13px;font-family:inherit;outline:none;margin-bottom:6px;" />'+
+          '<div style="display:flex;gap:6px;">'+
+            '<input data-fcetag="'+c.id+'" value="'+esc(c.tag||'')+'" placeholder="Tag" style="flex:1;padding:6px 9px;border:none;border-radius:8px;background:rgba(255,255,255,.2);color:#fff;font-size:13px;font-family:inherit;outline:none;" />'+
+            '<button data-fcesave="'+c.id+'" style="padding:0 12px;border:none;border-radius:8px;background:#b8a4ed;color:#1a1030;font-size:12px;font-weight:700;cursor:pointer;">Save</button>'+
+            '<button data-fcecancel style="padding:0 10px;border:none;border-radius:8px;background:rgba(255,255,255,.2);color:#fff;font-size:12px;cursor:pointer;">&#x2715;</button>'+
+          '</div>';
+      } else {
+        row.innerHTML=
+          '<div style="display:flex;align-items:center;gap:8px;">'+
+            '<div style="flex:1;min-width:0;"><div style="font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:#b8a4ed;margin-bottom:2px;opacity:.8;">'+esc(c.tag)+'</div><div style="font-size:14px;font-weight:600;color:#fff;">'+esc(c.it)+'</div><div style="font-size:12px;color:#c4b8e8;">'+esc(c.en)+'</div></div>'+
+            '<button data-fcedit="'+c.id+'" style="width:28px;height:28px;border:none;border-radius:9999px;background:rgba(255,255,255,.1);color:#b8a4ed;font-size:13px;cursor:pointer;padding:0;line-height:1;">&#x270F;</button>'+
+            '<button data-fctoggle="'+c.id+'" data-active="'+(active?'1':'0')+'" style="padding:4px 10px;border:none;border-radius:9999px;background:'+(active?'#b8a4ed':'rgba(255,255,255,.15)')+';color:'+(active?'#1a1030':'#b8a4ed')+';font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;">'+(active?'&#x25CF; On':'&#x25CB; Off')+'</button>'+
+            '<button data-fcdel="'+c.id+'" style="width:28px;height:28px;border:none;border-radius:9999px;background:rgba(255,255,255,.1);color:#b8a4ed;font-size:16px;cursor:pointer;padding:0;line-height:1;">&times;</button>'+
+          '</div>';
+      }
       container.appendChild(row);
     });
-    container.querySelectorAll('[data-fctoggle]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var id = btn.getAttribute('data-fctoggle');
-        var nowActive = btn.getAttribute('data-active') === '0';
-        toggleCard(id, nowActive, function() { refreshCards(); });
-      });
-    });
-    container.querySelectorAll('[data-fcdel]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        deleteCard(btn.getAttribute('data-fcdel'), function() { refreshCards(); });
-      });
-    });
+    container.querySelectorAll('[data-fcedit]').forEach(function(b){ b.addEventListener('click',function(){ fcEditId=b.getAttribute('data-fcedit'); refreshCards(); }); });
+    container.querySelectorAll('[data-fcesave]').forEach(function(b){ b.addEventListener('click',function(){
+      var id=b.getAttribute('data-fcesave');
+      var it=container.querySelector('[data-fceit="'+id+'"]').value.trim();
+      var en=container.querySelector('[data-fceen="'+id+'"]').value.trim();
+      var ex=container.querySelector('[data-fceex="'+id+'"]').value.trim();
+      var tag=container.querySelector('[data-fcetag="'+id+'"]').value.trim()||'custom';
+      if(!it||!en)return; updateCard(id,{it:it,en:en,ex:ex,tag:tag},function(){ fcEditId=null; refreshCards(); });
+    }); });
+    container.querySelectorAll('[data-fcecancel]').forEach(function(b){ b.addEventListener('click',function(){ fcEditId=null; refreshCards(); }); });
+    container.querySelectorAll('[data-fctoggle]').forEach(function(b){ b.addEventListener('click',function(){ toggleCard(b.getAttribute('data-fctoggle'),b.getAttribute('data-active')==='0',function(){ refreshCards(); }); }); });
+    container.querySelectorAll('[data-fcdel]').forEach(function(b){ b.addEventListener('click',function(){ deleteCard(b.getAttribute('data-fcdel'),function(){ refreshCards(); }); }); });
   }
 
-  /* ════════════════════════════
-     AUTH UI
-  ════════════════════════════ */
-  function renderAuthBar() {
-    var bar = document.getElementById('auth-bar');
-    if (!bar) return;
-    if (currentUser) {
-      bar.innerHTML =
-        '<span style="font-size:13px;color:#6a6a6a;">Syncing as <strong>' + esc(currentUser.email) + '</strong></span>' +
-        '<button id="auth-signout" style="padding:5px 14px;border:none;border-radius:9999px;background:#e5e5e5;color:#3a3a3a;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Sign out</button>';
-      document.getElementById('auth-signout').addEventListener('click', function() {
-        sb.auth.signOut().then(function() { currentUser = null; renderAuthBar(); refreshAll(); });
-      });
-    } else {
-      bar.innerHTML =
-        '<span style="font-size:13px;color:#6a6a6a;">Save across devices?</span>' +
-        '<input id="auth-email" type="email" placeholder="your@email.com" style="padding:6px 12px;border:1px solid #e5e5e5;border-radius:9999px;font-size:13px;font-family:inherit;outline:none;width:180px;" />' +
-        '<button id="auth-send" style="padding:6px 16px;border:none;border-radius:9999px;background:#1a3a3a;color:#a4d4c5;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Send link</button>';
-      document.getElementById('auth-send').addEventListener('click', function() {
-        var email = document.getElementById('auth-email').value.trim();
-        if (!email) return;
-        document.getElementById('auth-send').textContent = 'Sending...';
-        sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: window.location.href } }).then(function(res) {
-          bar.innerHTML = '<span style="font-size:13px;color:#1a3a3a;font-weight:600;">✓ Check your email for a magic link!</span>';
-        });
-      });
-    }
-  }
-
-  /* ════════════════════════════
-     PANEL BUILD
-  ════════════════════════════ */
+  /* ── PANEL BUILD ── */
   function buildPhrasesPanel() {
-    var panel = document.createElement('section');
-    panel.id = 'my-phrases-panel';
-    panel.style.cssText = 'background:#1a3a3a;border-radius:24px;padding:24px;display:flex;flex-direction:column;';
-    panel.innerHTML =
-      '<div style="margin-bottom:14px;"><span style="font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a4d4c5;">My Phrases</span></div>' +
-      '<div style="background:#1f4242;border-radius:16px;padding:14px;margin-bottom:14px;">' +
-        '<input id="mph-it" placeholder="Italian phrase *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:#0e2e2e;color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
-        '<input id="mph-en" placeholder="English (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:#0e2e2e;color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
-        '<div style="display:flex;gap:8px;">' +
-          '<input id="mph-tag" placeholder="Tag" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:#0e2e2e;color:#fff;font-size:14px;font-family:inherit;outline:none;" />' +
-          '<button id="mph-add" style="padding:0 16px;border:none;border-radius:9px;background:#a4d4c5;color:#0a2a20;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>' +
-        '</div>' +
-      '</div>' +
-      '<div id="mph-list" style="overflow-y:auto;flex:1;"></div>';
-    return panel;
+    var p=document.createElement('section');
+    p.id='my-phrases-panel';
+    p.style.cssText='background:#1a3a3a;border-radius:24px;padding:20px;margin-top:16px;width:100%;box-sizing:border-box;';
+    p.innerHTML=
+      '<div style="margin-bottom:14px;"><span style="font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#a4d4c5;">My Phrases</span></div>'+
+      '<div style="background:#1f4242;border-radius:16px;padding:14px;margin-bottom:14px;">'+
+        '<input id="mph-it" placeholder="Italian phrase *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:#0e2e2e;color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />'+
+        '<input id="mph-en" placeholder="English (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:#0e2e2e;color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />'+
+        '<div style="display:flex;gap:8px;">'+
+          '<input id="mph-tag" placeholder="Tag" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:#0e2e2e;color:#fff;font-size:14px;font-family:inherit;outline:none;" />'+
+          '<button id="mph-add" style="padding:0 16px;border:none;border-radius:9px;background:#a4d4c5;color:#0a2a20;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>'+
+        '</div>'+
+      '</div>'+
+      '<div id="mph-list" style="max-height:300px;overflow-y:auto;"></div>';
+    return p;
   }
 
   function buildFlashcardsPanel() {
-    var panel = document.createElement('section');
-    panel.id = 'my-flashcards-panel';
-    panel.style.cssText = 'background:#b8a4ed;border-radius:24px;padding:24px;display:flex;flex-direction:column;';
-    panel.innerHTML =
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
-        '<span style="font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#2a2540;">My Flashcards</span>' +
-        '<span id="mfc-counter" style="font-size:12px;font-weight:600;color:#2a2540;opacity:.7;">0 / 0</span>' +
-      '</div>' +
-      '<div id="mfc-card-display" style="margin-bottom:10px;"></div>' +
-      '<div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px;">' +
-        '<button onclick="window.__mfcPrev()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.35);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">◀ Prev</button>' +
-        '<button onclick="window.__mfcShuffle()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.35);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">⇌ Shuffle</button>' +
-        '<button onclick="window.__mfcNext()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.35);color:#2a2540;font-size:13px;font-weight:600;cursor:pointer;">Next ▶</button>' +
-      '</div>' +
-      '<div style="background:rgba(255,255,255,.4);border-radius:16px;padding:14px;margin-bottom:14px;">' +
-        '<input id="mfc-it" placeholder="Italian *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.75);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
-        '<input id="mfc-en" placeholder="English *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.75);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
-        '<input id="mfc-ex" placeholder="Example sentence (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.75);color:#1a1030;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />' +
-        '<div style="display:flex;gap:8px;">' +
-          '<input id="mfc-tag" placeholder="Tag" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.75);color:#1a1030;font-size:14px;font-family:inherit;outline:none;" />' +
-          '<button id="mfc-add" style="padding:0 16px;border:none;border-radius:9px;background:#2a2540;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>' +
-        '</div>' +
-      '</div>' +
-      '<div id="mfc-list" style="overflow-y:auto;flex:1;max-height:200px;"></div>';
-    return panel;
+    var p=document.createElement('section');
+    p.id='my-flashcards-panel';
+    p.style.cssText='background:#2a2540;border-radius:24px;padding:20px;margin-top:16px;width:100%;box-sizing:border-box;';
+    p.innerHTML=
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'+
+        '<span style="font-size:12px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#b8a4ed;">My Flashcards</span>'+
+        '<span id="mfc-counter" style="font-size:12px;font-weight:600;color:#b8a4ed;opacity:.7;">0 / 0</span>'+
+      '</div>'+
+      '<div id="mfc-card-display" style="margin-bottom:10px;"></div>'+
+      '<div style="display:flex;justify-content:center;gap:8px;margin-bottom:14px;">'+
+        '<button onclick="window.__mfcPrev()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">&#x25C4; Prev</button>'+
+        '<button onclick="window.__mfcShuffle()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">&#x21CC; Shuffle</button>'+
+        '<button onclick="window.__mfcNext()" style="height:36px;padding:0 14px;border:none;border-radius:10px;background:rgba(255,255,255,.15);color:#fff;font-size:13px;font-weight:600;cursor:pointer;">Next &#x25BA;</button>'+
+      '</div>'+
+      '<div style="background:rgba(255,255,255,.08);border-radius:16px;padding:14px;margin-bottom:14px;">'+
+        '<input id="mfc-it" placeholder="Italian *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.12);color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />'+
+        '<input id="mfc-en" placeholder="English *" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.12);color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />'+
+        '<input id="mfc-ex" placeholder="Example sentence (optional)" style="display:block;width:100%;box-sizing:border-box;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.12);color:#fff;font-size:14px;font-family:inherit;outline:none;margin-bottom:8px;" />'+
+        '<div style="display:flex;gap:8px;">'+
+          '<input id="mfc-tag" placeholder="Tag" style="flex:1;padding:8px 11px;border:none;border-radius:9px;background:rgba(255,255,255,.12);color:#fff;font-size:14px;font-family:inherit;outline:none;" />'+
+          '<button id="mfc-add" style="padding:0 16px;border:none;border-radius:9px;background:#b8a4ed;color:#1a1030;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">+ Add</button>'+
+        '</div>'+
+      '</div>'+
+      '<div id="mfc-list" style="max-height:260px;overflow-y:auto;"></div>';
+    return p;
   }
 
-  function refreshAll() {
-    refreshPhrases();
-    refreshCards();
-    renderAuthBar();
+  function refreshAll() { refreshPhrases(); refreshCards(); }
+
+  /* ── hide S2/S3/S4 season buttons ── */
+  function hideOtherSeasons() {
+    [].forEach.call(document.querySelectorAll('button'), function(btn) {
+      var t = (btn.textContent||'').replace(/\s+/g,' ').trim();
+      if (/^Season [234]/.test(t)) btn.style.display = 'none';
+    });
   }
 
+  /* ── patch lesson grid layout ── */
+  function patchLessonGrid() {
+    var container = null;
+    [].forEach.call(document.querySelectorAll('div'), function(el) {
+      if (container) return;
+      var st = el.getAttribute('style') || '';
+      if (st.indexOf('overflow-x: auto') > -1 && st.indexOf('display: flex') > -1 && el.children.length >= 10) container = el;
+    });
+    if (!container || container.__gridPatched) return;
+    container.style.display = 'grid';
+    container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(180px, 1fr))';
+    container.style.gap = '12px';
+    container.style.overflowX = 'visible';
+    container.style.overflowY = 'auto';
+    container.style.maxHeight = '480px';
+    container.style.padding = '4px 2px 12px';
+    container.__gridPatched = true;
+  }
+
+  /* ── hide "Save across devices" built into the React app (if any) ── */
+  function hideSaveBar() {
+    [].forEach.call(document.querySelectorAll('input[type=email],input[type=text][placeholder*="email"]'), function(el) {
+      var wrap = el.closest && el.closest('[style]');
+      if (wrap) wrap.style.display = 'none';
+    });
+  }
+
+  var _initDone = false;
   function init() {
-    if (document.getElementById('my-row')) { refreshAll(); return; }
+    if (_initDone) { refreshAll(); return; }
 
     var bento = null;
     [].forEach.call(document.querySelectorAll('div'), function(el) {
@@ -554,112 +438,100 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
     if (!bento || !bento.parentNode) return;
 
-    /* auth bar */
-    var authWrap = document.createElement('div');
-    authWrap.style.cssText = 'max-width:1320px;margin:20px auto 0;padding:0 ' + (window.innerWidth<=767?'16px':'40px') + ';display:flex;align-items:center;gap:12px;flex-wrap:wrap;';
-    authWrap.innerHTML = '<div id="auth-bar" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"></div>';
-    bento.parentNode.insertBefore(authWrap, bento.nextSibling);
+    _initDone = true;
 
-    /* panels row */
-    var row = document.createElement('div');
-    row.id = 'my-row';
-    row.style.cssText = 'max-width:1320px;margin:16px auto 48px;padding:0 ' + (window.innerWidth<=767?'16px':'40px') + ';display:grid;grid-template-columns:' + (window.innerWidth<=767?'1fr':'1fr 1fr') + ';gap:24px;';
-    row.appendChild(buildFlashcardsPanel());
-    row.appendChild(buildPhrasesPanel());
-    authWrap.parentNode.insertBefore(row, authWrap.nextSibling);
+    /* Hide other seasons */
+    hideOtherSeasons();
+    setTimeout(hideOtherSeasons, 600);
+    setTimeout(hideOtherSeasons, 1500);
 
-    /* wire add buttons */
+    /* Patch lesson grid */
+    patchLessonGrid();
+    setTimeout(patchLessonGrid, 600);
+    setTimeout(patchLessonGrid, 1500);
+
+    /* Find flashcard cell and phrases cell */
+    var fcCell = null, phCell = null;
+    [].forEach.call(bento.children, function(child) {
+      var txt = child.textContent || '';
+      if (!fcCell && txt.indexOf('FLASHCARDS') > -1 && txt.indexOf('tap to reveal') > -1) fcCell = child;
+      if (!phCell && child.querySelector && child.querySelector('.marquee-track')) phCell = child;
+    });
+
+    /* Build My Flashcards slot */
+    var fcSlot = document.createElement('div');
+    fcSlot.id = 'my-fc-slot';
+    fcSlot.style.cssText = 'width:100%;box-sizing:border-box;grid-column:1/-1;';
+    fcSlot.appendChild(buildFlashcardsPanel());
+
+    /* Build My Phrases slot */
+    var phSlot = document.createElement('div');
+    phSlot.id = 'my-ph-slot';
+    phSlot.style.cssText = 'width:100%;box-sizing:border-box;grid-column:1/-1;';
+    phSlot.appendChild(buildPhrasesPanel());
+
+    /* Insert after matching cells — span all columns with grid-column:1/-1 */
+    if (fcCell && fcCell.parentNode === bento) {
+      bento.insertBefore(fcSlot, fcCell.nextSibling);
+    } else { bento.appendChild(fcSlot); }
+
+    if (phCell && phCell.parentNode === bento) {
+      /* re-query nextSibling after fcSlot may have been inserted before phCell */
+      bento.insertBefore(phSlot, phCell.nextSibling);
+    } else { bento.appendChild(phSlot); }
+
+    /* Marker so init doesn't re-run */
+    var marker = document.createElement('div');
+    marker.id = 'my-row';
+    marker.style.display = 'none';
+    bento.appendChild(marker);
+
+    /* Wire add phrase */
     document.getElementById('mph-add').addEventListener('click', function() {
-      var it = document.getElementById('mph-it').value.trim();
-      var en = document.getElementById('mph-en').value.trim();
-      var tag = document.getElementById('mph-tag').value.trim() || 'custom';
-      if (!it) { document.getElementById('mph-it').focus(); return; }
-      document.getElementById('mph-add').textContent = '...';
-      addPhrase({ it:it, en:en, tag:tag }, function() {
-        document.getElementById('mph-add').textContent = '+ Add';
-        ['mph-it','mph-en','mph-tag'].forEach(function(id) { document.getElementById(id).value=''; });
-        refreshPhrases();
-      });
+      var it=document.getElementById('mph-it').value.trim(), en=document.getElementById('mph-en').value.trim(), tag=document.getElementById('mph-tag').value.trim()||'custom';
+      if(!it){document.getElementById('mph-it').focus();return;}
+      document.getElementById('mph-add').textContent='...';
+      addPhrase({it:it,en:en,tag:tag},function(){ document.getElementById('mph-add').textContent='+ Add'; ['mph-it','mph-en','mph-tag'].forEach(function(id){document.getElementById(id).value='';}); refreshPhrases(); });
     });
-    ['mph-it','mph-en','mph-tag'].forEach(function(id) {
-      document.getElementById(id).addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('mph-add').click(); });
-    });
+    ['mph-it','mph-en','mph-tag'].forEach(function(id){ document.getElementById(id).addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('mph-add').click();}); });
 
+    /* Wire add flashcard */
     document.getElementById('mfc-add').addEventListener('click', function() {
-      var it = document.getElementById('mfc-it').value.trim();
-      var en = document.getElementById('mfc-en').value.trim();
-      var ex = document.getElementById('mfc-ex').value.trim();
-      var tag = document.getElementById('mfc-tag').value.trim() || 'custom';
-      if (!it||!en) { document.getElementById(it?'mfc-en':'mfc-it').focus(); return; }
-      document.getElementById('mfc-add').textContent = '...';
-      addCard({ it:it, en:en, ex:ex, tag:tag }, function() {
-        document.getElementById('mfc-add').textContent = '+ Add';
-        ['mfc-it','mfc-en','mfc-ex','mfc-tag'].forEach(function(id) { document.getElementById(id).value=''; });
-        refreshCards();
-      });
+      var it=document.getElementById('mfc-it').value.trim(), en=document.getElementById('mfc-en').value.trim(), ex=document.getElementById('mfc-ex').value.trim(), tag=document.getElementById('mfc-tag').value.trim()||'custom';
+      if(!it||!en){document.getElementById(it?'mfc-en':'mfc-it').focus();return;}
+      document.getElementById('mfc-add').textContent='...';
+      addCard({it:it,en:en,ex:ex,tag:tag},function(){ document.getElementById('mfc-add').textContent='+ Add'; ['mfc-it','mfc-en','mfc-ex','mfc-tag'].forEach(function(id){document.getElementById(id).value='';}); refreshCards(); });
     });
-    ['mfc-it','mfc-en','mfc-ex','mfc-tag'].forEach(function(id) {
-      document.getElementById(id).addEventListener('keydown', function(e) { if(e.key==='Enter') document.getElementById('mfc-add').click(); });
-    });
+    ['mfc-it','mfc-en','mfc-ex','mfc-tag'].forEach(function(id){ document.getElementById(id).addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('mfc-add').click();}); });
 
-    /* init Supabase if available */
-    if (window.supabase && window.supabase.createClient) {
-      sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
-      sb.auth.onAuthStateChange(function(event, session) {
-        var prevUser = currentUser;
-        currentUser = session ? session.user : null;
-        if (currentUser && !prevUser) migrateIfNeeded();
-        refreshAll();
-      });
-      sb.auth.getSession().then(function(res) {
-        currentUser = res.data && res.data.session ? res.data.session.user : null;
-        refreshAll();
-      });
-    } else {
-      refreshAll();
-    }
+    refreshAll();
   }
 
   setTimeout(init, 400);
   setTimeout(init, 1200);
 })();
 
-  /* ── Extra Season 1 Lessons (L11–40 from coffeebreaklanguages.com) ── */
+  /* ── Extra Season 1 Lessons (L11–40) ── */
   (function patchS1Lessons() {
-    var extra = [{"season":1,"num":11,"title":"Vorrei…","subtitle":"Ordering drinks at a café","cards":[{"it":"Vorrei","en":"I would like","ex":"\"Vorrei un caffè.\""},{"it":"Un caffè","en":"A coffee","ex":"\"Un caffè, per favore.\""},{"it":"Per favore","en":"Please","ex":"\"Due cappuccini, per favore.\""},{"it":"Il conto","en":"The bill","ex":"\"Il conto, per favore.\""},{"it":"Avete…?","en":"Do you have…?","ex":"\"Avete torte?\""},{"it":"Da portare via","en":"To take away","ex":"\"Da portare via, grazie.\""}],"phrases":[{"it":"Vorrei un cappuccino, per favore.","en":"I would like a cappuccino, please."},{"it":"Avete qualcosa di dolce?","en":"Do you have something sweet?"},{"it":"Il conto, per favore.","en":"The bill, please."},{"it":"Da portare via.","en":"To take away."}],"notes":{"title":"Vorrei – polite requests","intro":"\"Vorrei\" (I would like) is more polite than \"Voglio\" (I want). Use it whenever ordering.","blocks":[{"label":"Ordering","rows":[{"l":"I would like","r":"Vorrei"},{"l":"Do you have?","r":"Avete?"},{"l":"The bill","r":"Il conto"}]}],"tip":"Always add \"per favore\" to sound extra polite in Italian cafés."}},{"season":1,"num":12,"title":"Ordinare il cibo","subtitle":"Ordering food in Italian","cards":[{"it":"Cosa c'è?","en":"What is there?","ex":"\"Cosa c'è di buono oggi?\""},{"it":"La pasta","en":"Pasta","ex":"\"Prendo la pasta al pomodoro.\""},{"it":"Un primo","en":"A first course","ex":"\"Come primo prendo le tagliatelle.\""},{"it":"Un secondo","en":"A main course","ex":"\"Come secondo vorrei il pollo.\""},{"it":"Il contorno","en":"Side dish","ex":"\"Che contorni avete?\""},{"it":"È buonissimo!","en":"It's delicious!","ex":"\"Questa pizza è buonissima!\""}],"phrases":[{"it":"Cosa c'è di buono oggi?","en":"What's good today?"},{"it":"Prendo la pasta al pomodoro.","en":"I'll have the tomato pasta."},{"it":"Vorrei il pesce come secondo.","en":"I'd like the fish as a main."},{"it":"È buonissimo!","en":"It's delicious!"}],"notes":{"title":"Ordering a meal","intro":"Italian meals follow a structure: antipasto, primo, secondo, contorno, dolce.","blocks":[{"label":"Course order","rows":[{"l":"Starter","r":"l'antipasto"},{"l":"First course","r":"il primo"},{"l":"Main","r":"il secondo"},{"l":"Side","r":"il contorno"},{"l":"Dessert","r":"il dolce"}]}],"tip":"It's fine to order just one or two courses."}},{"season":1,"num":13,"title":"Al ristorante","subtitle":"At the Italian restaurant","cards":[{"it":"Un tavolo per due","en":"A table for two","ex":"\"Avete un tavolo per due?\""},{"it":"La prenotazione","en":"The reservation","ex":"\"Ho una prenotazione.\""},{"it":"Il menù","en":"The menu","ex":"\"Posso vedere il menù?\""},{"it":"Sono allergico a…","en":"I'm allergic to…","ex":"\"Sono allergico alle noci.\""},{"it":"Il cameriere","en":"The waiter","ex":"\"Scusi, cameriere!\""},{"it":"Buon appetito!","en":"Enjoy your meal!","ex":"\"Buon appetito a tutti!\""}],"phrases":[{"it":"Avete un tavolo per due?","en":"Do you have a table for two?"},{"it":"Posso vedere il menù?","en":"Can I see the menu?"},{"it":"Sono allergico al glutine.","en":"I'm allergic to gluten."},{"it":"Scusi, il conto per favore.","en":"Excuse me, the bill please."}],"notes":{"title":"Restaurant essentials","intro":"Knowing a few key phrases makes dining out in Italy much more enjoyable.","blocks":[{"label":"Key phrases","rows":[{"l":"A table for two","r":"un tavolo per due"},{"l":"The menu","r":"il menù"},{"l":"Enjoy your meal","r":"buon appetito"}]}],"tip":"\"Scusi\" (Excuse me) is the polite way to get a waiter's attention."}},{"season":1,"num":14,"title":"In albergo","subtitle":"Checking into a hotel","cards":[{"it":"Ho una prenotazione","en":"I have a reservation","ex":"\"Ho una prenotazione a nome Smith.\""},{"it":"La camera","en":"The room","ex":"\"La mia camera è al terzo piano.\""},{"it":"La chiave","en":"The key","ex":"\"Ecco la chiave della camera.\""},{"it":"L'ascensore","en":"The lift","ex":"\"Dov'è l'ascensore?\""},{"it":"La colazione","en":"Breakfast","ex":"\"A che ora è la colazione?\""},{"it":"Fare il check-out","en":"To check out","ex":"\"Devo fare il check-out alle dieci.\""}],"phrases":[{"it":"Ho una prenotazione a nome Smith.","en":"I have a reservation in the name of Smith."},{"it":"A che ora è la colazione?","en":"What time is breakfast?"},{"it":"Dov'è l'ascensore?","en":"Where is the lift?"},{"it":"A che ora devo lasciare la camera?","en":"What time do I need to leave the room?"}],"notes":{"title":"Hotel vocabulary","intro":"Italian hotels range from one to five stars. Breakfast is often included.","blocks":[{"label":"Essentials","rows":[{"l":"Room","r":"la camera"},{"l":"Key","r":"la chiave"},{"l":"Lift","r":"l'ascensore"},{"l":"Breakfast","r":"la colazione"}]}],"tip":"\"Mezza pensione\" means half board; \"pensione completa\" means full board."}},{"season":1,"num":15,"title":"I numeri in pratica","subtitle":"Numbers for prices and dates","cards":[{"it":"Undici","en":"Eleven","ex":"\"Costa undici euro.\""},{"it":"Venti","en":"Twenty","ex":"\"Ho vent'anni.\""},{"it":"Trenta","en":"Thirty","ex":"\"Trenta minuti.\""},{"it":"Cento","en":"One hundred","ex":"\"Cento euro!\""},{"it":"Quant'è?","en":"How much is it?","ex":"\"Quant'è in tutto?\""},{"it":"Il resto","en":"The change","ex":"\"Tenga il resto.\""}],"phrases":[{"it":"Quant'è in tutto?","en":"How much is it altogether?"},{"it":"Costa quarantacinque euro.","en":"It costs forty-five euros."},{"it":"Ho solo cinquanta euro.","en":"I only have fifty euros."},{"it":"Tenga il resto.","en":"Keep the change."}],"notes":{"title":"Numbers 11–100","intro":"Once you know 1–10, Italian numbers follow a regular pattern.","blocks":[{"label":"Tens","rows":[{"l":"20","r":"venti"},{"l":"30","r":"trenta"},{"l":"40","r":"quaranta"},{"l":"50","r":"cinquanta"},{"l":"100","r":"cento"}]}],"tip":"21 = ventuno, 22 = ventidue. Drop the final vowel of the ten before uno and otto."}},{"season":1,"num":16,"title":"Fare shopping","subtitle":"Shopping vocabulary","cards":[{"it":"Quanto costa?","en":"How much does it cost?","ex":"\"Quanto costa questa borsa?\""},{"it":"Troppo caro","en":"Too expensive","ex":"\"È troppo caro per me.\""},{"it":"Uno sconto","en":"A discount","ex":"\"C'è uno sconto?\""},{"it":"La taglia","en":"The size","ex":"\"Che taglia porta?\""},{"it":"Sto cercando…","en":"I'm looking for…","ex":"\"Sto cercando una camicia bianca.\""},{"it":"Lo prendo!","en":"I'll take it!","ex":"\"Perfetto, lo prendo!\""}],"phrases":[{"it":"Quanto costa questa borsa?","en":"How much does this bag cost?"},{"it":"Ha qualcosa di meno caro?","en":"Do you have something cheaper?"},{"it":"Posso provarlo?","en":"Can I try it on?"},{"it":"Lo prendo!","en":"I'll take it!"}],"notes":{"title":"Shopping phrases","intro":"Shopping in Italy is a pleasure – markets offer great local produce and crafts.","blocks":[{"label":"Shopping vocab","rows":[{"l":"How much?","r":"quanto costa?"},{"l":"Too expensive","r":"troppo caro"},{"l":"Discount","r":"uno sconto"},{"l":"Size","r":"la taglia"}]}],"tip":"\"Saldo\" means sale – look out for this word in shop windows!"}},{"season":1,"num":17,"title":"Informazioni turistiche","subtitle":"Tourist information and sightseeing","cards":[{"it":"Un biglietto","en":"A ticket","ex":"\"Vorrei un biglietto per il museo.\""},{"it":"Il museo","en":"The museum","ex":"\"Il museo è chiuso il lunedì.\""},{"it":"La chiesa","en":"The church","ex":"\"La chiesa è bellissima.\""},{"it":"A che ora apre?","en":"What time does it open?","ex":"\"A che ora apre il museo?\""},{"it":"Ingresso gratuito","en":"Free entry","ex":"\"C'è l'ingresso gratuito?\""},{"it":"Un souvenir","en":"A souvenir","ex":"\"Cerco un souvenir per mia madre.\""}],"phrases":[{"it":"Vorrei un biglietto per il museo.","en":"I'd like a ticket for the museum."},{"it":"A che ora chiude?","en":"What time does it close?"},{"it":"C'è l'ingresso gratuito?","en":"Is there free entry?"},{"it":"Dov'è l'ufficio informazioni?","en":"Where is the information office?"}],"notes":{"title":"Sightseeing vocabulary","intro":"Italy has more UNESCO World Heritage Sites than any other country!","blocks":[{"label":"Places","rows":[{"l":"Museum","r":"il museo"},{"l":"Church","r":"la chiesa"},{"l":"Gallery","r":"la galleria"},{"l":"Square","r":"la piazza"}]}],"tip":"Many Italian churches are free to enter, but cover your shoulders and knees."}},{"season":1,"num":18,"title":"Chiedere la strada","subtitle":"Asking for and giving directions","cards":[{"it":"Scusi…","en":"Excuse me…","ex":"\"Scusi, dov'è la stazione?\""},{"it":"Giri a destra","en":"Turn right","ex":"\"Giri a destra al semaforo.\""},{"it":"Giri a sinistra","en":"Turn left","ex":"\"Giri a sinistra dopo il ponte.\""},{"it":"Vada dritto","en":"Go straight on","ex":"\"Vada dritto per cento metri.\""},{"it":"È lontano?","en":"Is it far?","ex":"\"È lontano a piedi?\""},{"it":"A piedi","en":"On foot","ex":"\"Si può andare a piedi.\""}],"phrases":[{"it":"Scusi, dov'è la stazione?","en":"Excuse me, where is the station?"},{"it":"Giri a destra al semaforo.","en":"Turn right at the traffic lights."},{"it":"È lontano a piedi?","en":"Is it far to walk?"},{"it":"La ringrazio molto.","en":"Thank you very much."}],"notes":{"title":"Giving directions","intro":"Italians are generally very helpful when asked for directions.","blocks":[{"label":"Directions","rows":[{"l":"Right","r":"a destra"},{"l":"Left","r":"a sinistra"},{"l":"Straight on","r":"dritto"},{"l":"At the lights","r":"al semaforo"}]}],"tip":"\"Scusi\" (formal) with strangers, \"Scusa\" (informal) with friends."}},{"season":1,"num":19,"title":"I mezzi di trasporto","subtitle":"Getting around by public transport","cards":[{"it":"L'autobus","en":"The bus","ex":"\"L'autobus numero dieci va in centro.\""},{"it":"Il treno","en":"The train","ex":"\"Il treno parte alle otto.\""},{"it":"La metropolitana","en":"The underground","ex":"\"Prendo la metropolitana.\""},{"it":"La fermata","en":"The stop","ex":"\"Qual è la prossima fermata?\""},{"it":"Il capolinea","en":"The terminus","ex":"\"Il capolinea è in piazza.\""},{"it":"Dove devo scendere?","en":"Where do I get off?","ex":"\"Dove devo scendere per il Duomo?\""}],"phrases":[{"it":"C'è un autobus per il centro?","en":"Is there a bus to the centre?"},{"it":"Dove devo scendere per il Duomo?","en":"Where do I get off for the cathedral?"},{"it":"Devo cambiare?","en":"Do I need to change?"},{"it":"A che ora parte il prossimo treno?","en":"What time does the next train leave?"}],"notes":{"title":"Public transport","intro":"Italy has excellent public transport in cities. Validate your ticket before boarding!","blocks":[{"label":"Transport","rows":[{"l":"Bus","r":"l'autobus"},{"l":"Train","r":"il treno"},{"l":"Underground","r":"la metropolitana"},{"l":"Tram","r":"il tram"}]}],"tip":"Always validate (timbrare) your ticket or you may get a fine!"}},{"season":1,"num":20,"title":"Comprare i biglietti","subtitle":"Buying train tickets","cards":[{"it":"Un biglietto di andata","en":"A single ticket","ex":"\"Un biglietto di andata per Roma.\""},{"it":"Andata e ritorno","en":"Return ticket","ex":"\"Andata e ritorno per Venezia.\""},{"it":"Il binario","en":"The platform","ex":"\"Da quale binario parte il treno?\""},{"it":"La coincidenza","en":"The connection","ex":"\"Devo prendere la coincidenza.\""},{"it":"Il ritardo","en":"The delay","ex":"\"C'è un ritardo di venti minuti.\""},{"it":"In prima classe","en":"First class","ex":"\"Vorrei un posto in prima classe.\""}],"phrases":[{"it":"Un biglietto di andata per Firenze.","en":"A single to Florence."},{"it":"Da quale binario parte il treno?","en":"Which platform does the train leave from?"},{"it":"Il treno è in ritardo?","en":"Is the train delayed?"},{"it":"C'è un posto vicino al finestrino?","en":"Is there a window seat?"}],"notes":{"title":"At the train station","intro":"Italian trains are a great way to travel. Book in advance for the best prices.","blocks":[{"label":"Ticket types","rows":[{"l":"Single","r":"di andata"},{"l":"Return","r":"andata e ritorno"},{"l":"1st class","r":"prima classe"},{"l":"2nd class","r":"seconda classe"}]}],"tip":"Validate regional train tickets in the yellow machines on the platform before boarding."}},{"season":1,"num":21,"title":"Il tempo e le stagioni","subtitle":"Weather and seasons in Italian","cards":[{"it":"Che tempo fa?","en":"What's the weather like?","ex":"\"Che tempo fa oggi?\""},{"it":"Fa bello","en":"It's fine","ex":"\"Fa bello oggi!\""},{"it":"Fa freddo","en":"It's cold","ex":"\"Fa molto freddo in inverno.\""},{"it":"Piove","en":"It's raining","ex":"\"Piove spesso in autunno.\""},{"it":"Nevica","en":"It's snowing","ex":"\"Nevica in montagna.\""},{"it":"Le stagioni","en":"The seasons","ex":"\"Le quattro stagioni.\""}],"phrases":[{"it":"Che tempo fa oggi?","en":"What's the weather like today?"},{"it":"In estate fa molto caldo.","en":"In summer it's very hot."},{"it":"Piove spesso in primavera.","en":"It rains a lot in spring."},{"it":"Porta un ombrello – potrebbe piovere.","en":"Take an umbrella – it might rain."}],"notes":{"title":"Weather and seasons","intro":"Italy has a varied climate – the north is cooler, the south and islands are warmer.","blocks":[{"label":"Seasons","rows":[{"l":"Spring","r":"la primavera"},{"l":"Summer","r":"l'estate"},{"l":"Autumn","r":"l'autunno"},{"l":"Winter","r":"l'inverno"}]}],"tip":"\"Fa\" + adjective is used for weather: fa caldo (hot), fa freddo (cold)."}},{"season":1,"num":22,"title":"Le parti del corpo","subtitle":"Body parts vocabulary","cards":[{"it":"La testa","en":"The head","ex":"\"Mi fa male la testa.\""},{"it":"La mano","en":"The hand","ex":"\"Ho la mano destra.\""},{"it":"Il piede","en":"The foot","ex":"\"Mi sono fatto male al piede.\""},{"it":"La schiena","en":"The back","ex":"\"Ho mal di schiena.\""},{"it":"Lo stomaco","en":"The stomach","ex":"\"Ho mal di stomaco.\""},{"it":"Il braccio","en":"The arm","ex":"\"Il braccio sinistro.\""}],"phrases":[{"it":"Mi fa male la testa.","en":"My head hurts."},{"it":"Ho mal di schiena.","en":"I have back pain."},{"it":"Mi sono fatto male al ginocchio.","en":"I've hurt my knee."},{"it":"Non mi sento bene.","en":"I'm not feeling well."}],"notes":{"title":"Parts of the body","intro":"\"Mi fa male…\" means \"my … hurts\". \"Ho mal di…\" also works for pain.","blocks":[{"label":"Body parts","rows":[{"l":"Head","r":"la testa"},{"l":"Arm","r":"il braccio"},{"l":"Leg","r":"la gamba"},{"l":"Back","r":"la schiena"},{"l":"Stomach","r":"lo stomaco"}]}],"tip":"\"Mi fanno male i piedi\" – use the plural \"fanno\" when more than one thing hurts."}},{"season":1,"num":23,"title":"In farmacia","subtitle":"At the pharmacy","cards":[{"it":"Il farmacista","en":"The pharmacist","ex":"\"Il farmacista mi ha aiutato.\""},{"it":"Le aspirine","en":"Aspirin","ex":"\"Ha delle aspirine?\""},{"it":"Il cerotto","en":"A plaster","ex":"\"Ho bisogno di un cerotto.\""},{"it":"La ricetta","en":"The prescription","ex":"\"Ho la ricetta del medico.\""},{"it":"La febbre","en":"A fever","ex":"\"Ho la febbre alta.\""},{"it":"Quante volte al giorno?","en":"How many times a day?","ex":"\"Quante volte al giorno devo prenderlo?\""}],"phrases":[{"it":"Ha qualcosa per il mal di testa?","en":"Do you have something for a headache?"},{"it":"Ho la febbre.","en":"I have a fever."},{"it":"Serve la ricetta?","en":"Do you need a prescription?"},{"it":"Quante volte al giorno lo devo prendere?","en":"How many times a day should I take it?"}],"notes":{"title":"At the pharmacy","intro":"Italian pharmacies (farmacie, marked with a green cross) can advise on minor ailments.","blocks":[{"label":"Pharmacy words","rows":[{"l":"Pharmacist","r":"il farmacista"},{"l":"Prescription","r":"la ricetta"},{"l":"Plaster","r":"il cerotto"},{"l":"Tablets","r":"le compresse"}]}],"tip":"After hours, a rota system (turno) means one local pharmacy always stays open."}},{"season":1,"num":24,"title":"L'alfabeto e i verbi","subtitle":"The alphabet and present tense verbs","cards":[{"it":"Come si scrive?","en":"How do you spell it?","ex":"\"Come si scrive il Suo cognome?\""},{"it":"Parlare","en":"To speak","ex":"\"Parlo italiano.\""},{"it":"Capire","en":"To understand","ex":"\"Capisco abbastanza bene.\""},{"it":"Non capisco","en":"I don't understand","ex":"\"Non capisco – può ripetere?\""},{"it":"Ripetere","en":"To repeat","ex":"\"Può ripetere più lentamente?\""},{"it":"Scrivere","en":"To write","ex":"\"Come si scrive questa parola?\""}],"phrases":[{"it":"Come si scrive il Suo nome?","en":"How do you spell your name?"},{"it":"Parlo un po' d'italiano.","en":"I speak a little Italian."},{"it":"Non capisco bene.","en":"I don't understand well."},{"it":"Può ripetere più lentamente?","en":"Can you repeat more slowly?"}],"notes":{"title":"The Italian alphabet","intro":"Italian has 21 letters. J, K, W, X, Y only appear in foreign words.","blocks":[{"label":"-are verbs (parlare)","rows":[{"l":"io","r":"parlo"},{"l":"tu","r":"parli"},{"l":"lui/lei","r":"parla"},{"l":"noi","r":"parliamo"}]}],"tip":"\"Si scrive\" means \"it is spelled\" – very useful for spelling things out."}},{"season":1,"num":25,"title":"Al telefono","subtitle":"Using the phone in Italian","cards":[{"it":"Pronto!","en":"Hello! (phone)","ex":"\"Pronto, chi parla?\""},{"it":"Chi parla?","en":"Who's speaking?","ex":"\"Scusi, chi parla?\""},{"it":"Un momento","en":"One moment","ex":"\"Un momento, prego.\""},{"it":"Lasci un messaggio","en":"Leave a message","ex":"\"Vuole lasciare un messaggio?\""},{"it":"Richiamare","en":"To call back","ex":"\"Può richiamare più tardi?\""},{"it":"La segreteria","en":"Voicemail","ex":"\"Ho ascoltato la segreteria.\""}],"phrases":[{"it":"Pronto, sono Marco.","en":"Hello, it's Marco."},{"it":"Posso parlare con Giulia?","en":"Can I speak to Giulia?"},{"it":"Un momento, prego.","en":"One moment, please."},{"it":"Può richiamare più tardi?","en":"Can you call back later?"}],"notes":{"title":"Phone etiquette","intro":"Italians answer the phone with \"Pronto!\" which literally means \"Ready!\"","blocks":[{"label":"Phone phrases","rows":[{"l":"Hello (phone)","r":"Pronto!"},{"l":"Who's speaking?","r":"Chi parla?"},{"l":"Hold on","r":"Un momento"},{"l":"Call back","r":"richiamare"}]}],"tip":"\"Pronto\" is only used on the phone – it would sound odd as a general greeting!"}},{"season":1,"num":26,"title":"Parliamo di noi","subtitle":"Talking about yourself","cards":[{"it":"Ho… anni","en":"I am … years old","ex":"\"Ho trent'anni.\""},{"it":"Sono nato/a a…","en":"I was born in…","ex":"\"Sono nata a Roma.\""},{"it":"Abito a…","en":"I live in…","ex":"\"Abito a Milano da tre anni.\""},{"it":"Lavoro come…","en":"I work as…","ex":"\"Lavoro come insegnante.\""},{"it":"Il mio hobby","en":"My hobby","ex":"\"Il mio hobby è la fotografia.\""},{"it":"Nel tempo libero","en":"In my free time","ex":"\"Nel mio tempo libero leggo molto.\""}],"phrases":[{"it":"Ho trent'anni.","en":"I'm thirty years old."},{"it":"Abito a Londra da cinque anni.","en":"I've lived in London for five years."},{"it":"Lavoro come insegnante.","en":"I work as a teacher."},{"it":"Nel tempo libero mi piace leggere.","en":"In my free time I like reading."}],"notes":{"title":"Talking about yourself","intro":"Being able to talk about yourself helps you make connections with Italian speakers.","blocks":[{"label":"Key structures","rows":[{"l":"Age","r":"Ho … anni"},{"l":"Origin","r":"Sono di …"},{"l":"Residence","r":"Abito a …"},{"l":"Profession","r":"Lavoro come …"}]}],"tip":"\"Da\" + time = how long: \"Abito qui da tre anni\" (I've lived here for three years)."}},{"season":1,"num":27,"title":"Le professioni","subtitle":"Jobs and professions in Italian","cards":[{"it":"L'insegnante","en":"Teacher","ex":"\"Mia madre è insegnante.\""},{"it":"Il medico","en":"Doctor","ex":"\"Mio fratello è medico.\""},{"it":"L'avvocato","en":"Lawyer","ex":"\"Lavora come avvocato.\""},{"it":"Il cuoco","en":"Cook / Chef","ex":"\"È un cuoco molto bravo.\""},{"it":"Che lavoro fa?","en":"What do you do?","ex":"\"Che lavoro fa, scusi?\""},{"it":"Lavoro in…","en":"I work in…","ex":"\"Lavoro in un ospedale.\""}],"phrases":[{"it":"Che lavoro fa?","en":"What do you do for work?"},{"it":"Sono medico.","en":"I'm a doctor."},{"it":"Lavoro in un ufficio.","en":"I work in an office."},{"it":"Mi piace molto il mio lavoro.","en":"I really like my job."}],"notes":{"title":"Jobs in Italian","intro":"In Italian, you don't use the article with professions after \"essere\": \"Sono medico\".","blocks":[{"label":"Professions","rows":[{"l":"Teacher","r":"l'insegnante"},{"l":"Doctor","r":"il medico"},{"l":"Lawyer","r":"l'avvocato"},{"l":"Engineer","r":"l'ingegnere"}]}],"tip":"Exception: add an adjective and the article returns – \"Sono un buon medico\"."}},{"season":1,"num":28,"title":"Mi piace…","subtitle":"Expressing likes and dislikes","cards":[{"it":"Mi piace","en":"I like (singular)","ex":"\"Mi piace la pasta.\""},{"it":"Mi piacciono","en":"I like (plural)","ex":"\"Mi piacciono i gatti.\""},{"it":"Non mi piace","en":"I don't like","ex":"\"Non mi piace il calcio.\""},{"it":"Adoro","en":"I love","ex":"\"Adoro la pizza napoletana.\""},{"it":"Preferisco","en":"I prefer","ex":"\"Preferisco il caffè al tè.\""},{"it":"Che ne pensi?","en":"What do you think?","ex":"\"Che ne pensi di questo film?\""}],"phrases":[{"it":"Mi piace molto la musica italiana.","en":"I really like Italian music."},{"it":"Non mi piacciono i film dell'orrore.","en":"I don't like horror films."},{"it":"Adoro la cucina italiana.","en":"I love Italian cooking."},{"it":"Preferisco stare a casa.","en":"I prefer to stay at home."}],"notes":{"title":"Mi piace / mi piacciono","intro":"\"Piacere\" is a back-to-front verb: \"mi piace\" = \"it pleases me\" (I like it).","blocks":[{"label":"Piacere","rows":[{"l":"I like it","r":"mi piace"},{"l":"I like them","r":"mi piacciono"},{"l":"You like it","r":"ti piace"},{"l":"He/she likes it","r":"gli/le piace"}]}],"tip":"Use \"piace\" for singular nouns and infinitives; \"piacciono\" for plural nouns."}},{"season":1,"num":29,"title":"Gli aggettivi possessivi","subtitle":"Possessive adjectives in Italian","cards":[{"it":"Il mio / La mia","en":"My (m/f)","ex":"\"Il mio nome. La mia casa.\""},{"it":"Il tuo / La tua","en":"Your (inf. m/f)","ex":"\"Il tuo amico. La tua amica.\""},{"it":"Il suo / La sua","en":"His / Her / Your (formal)","ex":"\"Il suo libro. La sua borsa.\""},{"it":"Il nostro / La nostra","en":"Our (m/f)","ex":"\"Il nostro appartamento.\""},{"it":"I miei / Le mie","en":"My (m pl / f pl)","ex":"\"I miei genitori. Le mie sorelle.\""},{"it":"Famiglia – no article!","en":"Family nouns drop the article","ex":"\"Mia madre. Mio fratello.\""}],"phrases":[{"it":"Il mio nome è…","en":"My name is…"},{"it":"Dov'è la sua famiglia?","en":"Where is your family?"},{"it":"Questo è il nostro appartamento.","en":"This is our apartment."},{"it":"Come si chiama il tuo cane?","en":"What's your dog's name?"}],"notes":{"title":"Possessive adjectives","intro":"In Italian, possessives agree with the noun they describe, not the owner.","blocks":[{"label":"Singular","rows":[{"l":"My","r":"mio/mia"},{"l":"Your (inf)","r":"tuo/tua"},{"l":"His/Her","r":"suo/sua"},{"l":"Our","r":"nostro/nostra"}]}],"tip":"Drop the article with singular family members: \"mia madre\", \"mio padre\", \"mio fratello\"."}},{"season":1,"num":30,"title":"Descrivere le persone","subtitle":"Describing people in Italian","cards":[{"it":"Alto / Alta","en":"Tall (m/f)","ex":"\"Mio fratello è molto alto.\""},{"it":"Basso / Bassa","en":"Short (m/f)","ex":"\"La mia amica è bassa.\""},{"it":"I capelli","en":"Hair","ex":"\"Ha i capelli lunghi e biondi.\""},{"it":"Gli occhi","en":"Eyes","ex":"\"Ha gli occhi azzurri.\""},{"it":"Simpatico","en":"Nice / Friendly","ex":"\"È una persona molto simpatica.\""},{"it":"Com'è?","en":"What's he/she like?","ex":"\"Com'è il tuo professore?\""}],"phrases":[{"it":"Mia sorella è alta e mora.","en":"My sister is tall and dark-haired."},{"it":"Ha i capelli corti e ricci.","en":"He/she has short, curly hair."},{"it":"È una persona molto gentile.","en":"He/she is a very kind person."},{"it":"Com'è il tuo migliore amico?","en":"What is your best friend like?"}],"notes":{"title":"Describing appearances","intro":"Adjectives in Italian agree with the noun in gender and number.","blocks":[{"label":"Adjectives","rows":[{"l":"Tall","r":"alto/alta"},{"l":"Short","r":"basso/bassa"},{"l":"Thin","r":"magro/magra"},{"l":"Curly","r":"riccio/riccia"}]}],"tip":"\"Mora/moro\" = dark-haired; \"bionda/biondo\" = blonde; \"castana/castano\" = brown-haired."}},{"season":1,"num":31,"title":"Arriviamo in Italia!","subtitle":"Arriving in Italy","cards":[{"it":"Il passaporto","en":"The passport","ex":"\"Ecco il mio passaporto.\""},{"it":"Il controllo passaporti","en":"Passport control","ex":"\"Dobbiamo passare per il controllo.\""},{"it":"Il bagaglio","en":"The luggage","ex":"\"Ho perso il mio bagaglio.\""},{"it":"L'uscita","en":"The exit","ex":"\"Dov'è l'uscita?\""},{"it":"Il taxi","en":"The taxi","ex":"\"Prendo un taxi per il centro.\""},{"it":"Quanto ci vuole?","en":"How long does it take?","ex":"\"Quanto ci vuole per arrivare in centro?\""}],"phrases":[{"it":"Ho perso il mio bagaglio.","en":"I've lost my luggage."},{"it":"Dov'è l'uscita?","en":"Where is the exit?"},{"it":"Quanto ci vuole per arrivare in centro?","en":"How long does it take to get to the centre?"},{"it":"Posso prenotare un taxi?","en":"Can I book a taxi?"}],"notes":{"title":"Arriving in Italy","intro":"Italian airports are called \"aeroporti\". Most major cities have good transport links.","blocks":[{"label":"Airport vocab","rows":[{"l":"Passport","r":"il passaporto"},{"l":"Luggage","r":"il bagaglio"},{"l":"Exit","r":"l'uscita"},{"l":"Arrivals","r":"gli arrivi"}]}],"tip":"\"Quanto ci vuole?\" (How long does it take?) is a very useful phrase for travellers."}},{"season":1,"num":32,"title":"C'è un autobus?","subtitle":"Navigating the Italian city","cards":[{"it":"La pianta della città","en":"The city map","ex":"\"Ha una pianta della città?\""},{"it":"Il centro storico","en":"The old town","ex":"\"Voglio visitare il centro storico.\""},{"it":"La fermata","en":"The stop","ex":"\"Qual è la prossima fermata?\""},{"it":"Cambiare","en":"To change (bus/train)","ex":"\"Devo cambiare autobus?\""},{"it":"L'orario","en":"The timetable","ex":"\"Dove posso trovare l'orario?\""},{"it":"Dove si compra?","en":"Where can I buy (a ticket)?","ex":"\"Dove si compra il biglietto?\""}],"phrases":[{"it":"C'è un autobus per il centro storico?","en":"Is there a bus to the old town?"},{"it":"Dove si compra il biglietto?","en":"Where can I buy a ticket?"},{"it":"Devo cambiare?","en":"Do I need to change?"},{"it":"Qual è il capolinea?","en":"What is the terminus?"}],"notes":{"title":"City navigation","intro":"Most Italian cities have good bus networks, and some have trams or metro.","blocks":[{"label":"Getting around","rows":[{"l":"Map","r":"la pianta"},{"l":"Old town","r":"il centro storico"},{"l":"Stop","r":"la fermata"},{"l":"Timetable","r":"l'orario"}]}],"tip":"Buy bus tickets at a tabaccheria (tobacconist) before boarding – not on the bus!"}},{"season":1,"num":33,"title":"Ho una prenotazione","subtitle":"Hotel check-in and problems","cards":[{"it":"Fare il check-in","en":"To check in","ex":"\"Vorrei fare il check-in.\""},{"it":"Il piano","en":"The floor","ex":"\"La camera è al secondo piano.\""},{"it":"La vista sul mare","en":"Sea view","ex":"\"Vorrei una camera con vista sul mare.\""},{"it":"Il Wi-Fi","en":"Wi-Fi","ex":"\"Qual è la password del Wi-Fi?\""},{"it":"C'è un problema","en":"There's a problem","ex":"\"C'è un problema con la camera.\""},{"it":"Cambiare camera","en":"To change rooms","ex":"\"Posso cambiare camera?\""}],"phrases":[{"it":"Ho una prenotazione per tre notti.","en":"I have a reservation for three nights."},{"it":"C'è la colazione inclusa?","en":"Is breakfast included?"},{"it":"Qual è la password del Wi-Fi?","en":"What's the Wi-Fi password?"},{"it":"C'è un problema con il riscaldamento.","en":"There's a problem with the heating."}],"notes":{"title":"Hotel check-in","intro":"Most Italian hotels ask for your passport at check-in. This is required by law.","blocks":[{"label":"Hotel issues","rows":[{"l":"No hot water","r":"no acqua calda"},{"l":"Too noisy","r":"troppo rumoroso"},{"l":"Change rooms","r":"cambiare camera"},{"l":"Broken","r":"rotto/a"}]}],"tip":"\"Potrebbe risolvere il problema?\" = \"Could you sort the problem?\" Very useful!"}},{"season":1,"num":34,"title":"Fate colazione?","subtitle":"Breakfast at an Italian café","cards":[{"it":"Il bar","en":"The café","ex":"\"Gli italiani fanno colazione al bar.\""},{"it":"Il cornetto","en":"Croissant","ex":"\"Un cornetto alla crema, per favore.\""},{"it":"Il cappuccino","en":"Cappuccino","ex":"\"Un cappuccino, per favore.\""},{"it":"Il succo d'arancia","en":"Orange juice","ex":"\"Un succo d'arancia fresco.\""},{"it":"Fare colazione","en":"To have breakfast","ex":"\"Di solito faccio colazione al bar.\""},{"it":"Qualcosa di salato?","en":"Something savoury?","ex":"\"Ha qualcosa di salato?\""}],"phrases":[{"it":"Fate colazione?","en":"Do you serve breakfast?"},{"it":"Un cappuccino e un cornetto, per favore.","en":"A cappuccino and a croissant, please."},{"it":"Ha qualcosa di salato?","en":"Do you have something savoury?"},{"it":"Un succo d'arancia fresco, grazie.","en":"A fresh orange juice, please."}],"notes":{"title":"Italian breakfast","intro":"Italians typically have a quick breakfast at the bar – a cappuccino and cornetto!","blocks":[{"label":"Breakfast vocab","rows":[{"l":"Croissant","r":"il cornetto"},{"l":"Cappuccino","r":"il cappuccino"},{"l":"Toast","r":"il toast"},{"l":"Juice","r":"il succo"}]}],"tip":"Cappuccino is a breakfast drink for Italians – ordering it after lunch may raise eyebrows!"}},{"season":1,"num":35,"title":"Avete bisogno di aiuto?","subtitle":"Asking for and giving help","cards":[{"it":"Potrebbe aiutarmi?","en":"Could you help me?","ex":"\"Scusi, potrebbe aiutarmi?\""},{"it":"Non lo so","en":"I don't know","ex":"\"Non lo so, mi dispiace.\""},{"it":"Come si arriva a…?","en":"How do you get to…?","ex":"\"Come si arriva al Colosseo?\""},{"it":"Un bancomat","en":"A cash machine","ex":"\"Dov'è il bancomat più vicino?\""},{"it":"Mi dispiace","en":"I'm sorry","ex":"\"Mi dispiace, non capisco.\""},{"it":"Grazie mille","en":"Thanks very much","ex":"\"Grazie mille per il Suo aiuto!\""}],"phrases":[{"it":"Scusi, potrebbe aiutarmi?","en":"Excuse me, could you help me?"},{"it":"Come si arriva al Colosseo?","en":"How do you get to the Colosseum?"},{"it":"Dov'è il bancomat più vicino?","en":"Where is the nearest cash machine?"},{"it":"Grazie mille per il Suo aiuto!","en":"Thank you very much for your help!"}],"notes":{"title":"Asking for help","intro":"Don't be afraid to ask for help – Italians are welcoming to visitors who try to speak Italian.","blocks":[{"label":"Polite phrases","rows":[{"l":"Could you help?","r":"Potrebbe aiutarmi?"},{"l":"I don't know","r":"Non lo so"},{"l":"I'm sorry","r":"Mi dispiace"},{"l":"Thank you","r":"Grazie mille"}]}],"tip":"\"Potrebbe\" (could) sounds more polite than \"Può\" (can) when asking for help."}},{"season":1,"num":36,"title":"Cercare qualcosa?","subtitle":"Shopping – finding what you want","cards":[{"it":"Posso provarlo?","en":"Can I try it on?","ex":"\"Posso provarlo?\""},{"it":"La taglia giusta","en":"The right size","ex":"\"Non è la taglia giusta.\""},{"it":"Vorrei restituire…","en":"I'd like to return…","ex":"\"Vorrei restituire questo.\""},{"it":"Lo scontrino","en":"The receipt","ex":"\"Ho lo scontrino.\""},{"it":"Pagare con carta","en":"To pay by card","ex":"\"Posso pagare con carta?\""},{"it":"Sto solo guardando","en":"Just looking","ex":"\"Sto solo guardando, grazie.\""}],"phrases":[{"it":"Posso provarlo?","en":"Can I try it on?"},{"it":"Non è la taglia giusta.","en":"It's not the right size."},{"it":"Vorrei restituire questo – ecco lo scontrino.","en":"I'd like to return this – here's the receipt."},{"it":"Posso pagare con carta di credito?","en":"Can I pay by credit card?"}],"notes":{"title":"Shopping review","intro":"Italian shops often have a \"no return\" policy (vendita finale). Check before you buy!","blocks":[{"label":"Shopping vocab","rows":[{"l":"Try on","r":"provare"},{"l":"Receipt","r":"lo scontrino"},{"l":"Pay by card","r":"pagare con carta"},{"l":"Cash","r":"i contanti"}]}],"tip":"\"Sto solo guardando\" (just looking) is useful when you want to browse without pressure."}},{"season":1,"num":37,"title":"Ho qualche domanda","subtitle":"Review and question practice","cards":[{"it":"Capisce?","en":"Do you understand?","ex":"\"Capisce quello che ho detto?\""},{"it":"Può ripetere?","en":"Can you repeat?","ex":"\"Può ripetere, per favore?\""},{"it":"Più lentamente","en":"More slowly","ex":"\"Può parlare più lentamente?\""},{"it":"Come si dice…?","en":"How do you say…?","ex":"\"Come si dice 'umbrella' in italiano?\""},{"it":"Non ricordo","en":"I can't remember","ex":"\"Non ricordo la parola.\""},{"it":"Perfetto!","en":"Perfect!","ex":"\"Perfetto, grazie!\""}],"phrases":[{"it":"Può ripetere più lentamente?","en":"Can you repeat more slowly?"},{"it":"Come si dice 'umbrella' in italiano?","en":"How do you say 'umbrella' in Italian?"},{"it":"Non capisco questa parola.","en":"I don't understand this word."},{"it":"Posso fare una domanda?","en":"Can I ask a question?"}],"notes":{"title":"Review strategies","intro":"Don't be afraid to ask for help with the language itself – Italians love it when learners try!","blocks":[{"label":"Language survival","rows":[{"l":"Can you repeat?","r":"Può ripetere?"},{"l":"More slowly","r":"più lentamente"},{"l":"What does… mean?","r":"Cosa vuol dire…?"},{"l":"How do you say?","r":"Come si dice?"}]}],"tip":"\"Cosa vuol dire?\" and \"Come si dice?\" are learner superpowers!"}},{"season":1,"num":38,"title":"Dal medico","subtitle":"Medical Italian vocabulary","cards":[{"it":"Il medico","en":"The doctor","ex":"\"Ho bisogno di un medico.\""},{"it":"L'ospedale","en":"The hospital","ex":"\"Dov'è l'ospedale più vicino?\""},{"it":"La febbre","en":"Fever","ex":"\"Ho la febbre alta.\""},{"it":"Il raffreddore","en":"A cold","ex":"\"Ho il raffreddore.\""},{"it":"Ho mal di…","en":"I have a … ache","ex":"\"Ho mal di gola.\""},{"it":"Prendere una medicina","en":"To take medicine","ex":"\"Devo prendere questa medicina.\""}],"phrases":[{"it":"Ho la febbre alta.","en":"I have a high fever."},{"it":"Mi sento molto male.","en":"I'm feeling very unwell."},{"it":"Ho bisogno di vedere un medico.","en":"I need to see a doctor."},{"it":"Devo prendere questa medicina due volte al giorno.","en":"I need to take this medicine twice a day."}],"notes":{"title":"Medical vocabulary","intro":"In a medical emergency in Italy, call 118. EU citizens with an EHIC card can access state healthcare.","blocks":[{"label":"Symptoms","rows":[{"l":"Fever","r":"la febbre"},{"l":"Cold","r":"il raffreddore"},{"l":"Headache","r":"mal di testa"},{"l":"Stomachache","r":"mal di stomaco"}]}],"tip":"\"Chiami un'ambulanza!\" = \"Call an ambulance!\" – hopefully you'll never need it!"}},{"season":1,"num":39,"title":"A tavola!","subtitle":"Food, cooking and Italian recipes","cards":[{"it":"La ricetta","en":"The recipe","ex":"\"Questa ricetta è molto semplice.\""},{"it":"Gli ingredienti","en":"The ingredients","ex":"\"Di che ingredienti ho bisogno?\""},{"it":"Cucinare","en":"To cook","ex":"\"Mi piace cucinare.\""},{"it":"Delizioso!","en":"Delicious!","ex":"\"È delizioso!\""},{"it":"Ho l'acquolina in bocca","en":"My mouth is watering","ex":"\"Che profumo – ho l'acquolina in bocca!\""},{"it":"A tavola!","en":"Come to the table!","ex":"\"A tavola, è pronto!\""}],"phrases":[{"it":"Questa ricetta è molto semplice.","en":"This recipe is very simple."},{"it":"Ho l'acquolina in bocca!","en":"My mouth is watering!"},{"it":"Come hai fatto questo piatto?","en":"How did you make this dish?"},{"it":"È la specialità della casa.","en":"It's the house speciality."}],"notes":{"title":"Food culture","intro":"Italian food varies enormously by region. Each area has its own specialities and traditions.","blocks":[{"label":"Cooking vocab","rows":[{"l":"Recipe","r":"la ricetta"},{"l":"Ingredients","r":"gli ingredienti"},{"l":"To cook","r":"cucinare"},{"l":"To taste","r":"assaggiare"}]}],"tip":"\"L'acquolina in bocca\" literally means \"the little water in the mouth\" – what a great expression!"}},{"season":1,"num":40,"title":"Il passato","subtitle":"Past tense in Italian","cards":[{"it":"Ho mangiato","en":"I ate / I have eaten","ex":"\"Ho mangiato una pizza deliziosa.\""},{"it":"Sono andato/a","en":"I went","ex":"\"Sono andato al mercato.\""},{"it":"Ieri","en":"Yesterday","ex":"\"Ieri ho visitato il museo.\""},{"it":"La settimana scorsa","en":"Last week","ex":"\"La settimana scorsa sono andata a Roma.\""},{"it":"Avere (passato)","en":"Have – used with most verbs","ex":"\"Ho parlato con Maria.\""},{"it":"Essere (passato)","en":"Be – used with movement verbs","ex":"\"Sono arrivata tardi.\""}],"phrases":[{"it":"Ieri ho visitato il museo.","en":"Yesterday I visited the museum."},{"it":"Sono andato al mercato stamattina.","en":"I went to the market this morning."},{"it":"Abbiamo mangiato benissimo!","en":"We ate very well!"},{"it":"La settimana scorsa sono andata a Roma.","en":"Last week I went to Rome."}],"notes":{"title":"Il passato prossimo","intro":"The past tense (passato prossimo) is formed with avere or essere + past participle.","blocks":[{"label":"Past participles","rows":[{"l":"mangiare → mangiato","r":"eaten"},{"l":"andare → andato/a","r":"gone"},{"l":"parlare → parlato","r":"spoken"},{"l":"vedere → visto","r":"seen"}]}],"tip":"Use \"essere\" with verbs of movement and state changes: andare, venire, partire, arrivare."}}];
-
+    var extra = [{"season":1,"num":11,"title":"Vorrei…","subtitle":"Ordering drinks at a café","cards":[{"it":"Vorrei","en":"I would like","ex":"\"Vorrei un caffè.\""},{"it":"Un caffè","en":"A coffee","ex":"\"Un caffè, per favore.\""},{"it":"Per favore","en":"Please","ex":"\"Due cappuccini, per favore.\""},{"it":"Il conto","en":"The bill","ex":"\"Il conto, per favore.\""},{"it":"Avete…?","en":"Do you have…?","ex":"\"Avete torte?\""},{"it":"Da portare via","en":"To take away","ex":"\"Da portare via, grazie.\""}],"phrases":[{"it":"Vorrei un cappuccino, per favore.","en":"I would like a cappuccino, please."},{"it":"Avete qualcosa di dolce?","en":"Do you have something sweet?"},{"it":"Il conto, per favore.","en":"The bill, please."},{"it":"Da portare via.","en":"To take away."}],"notes":{"title":"Vorrei – polite requests","intro":"\"Vorrei\" is more polite than \"Voglio\". Use it when ordering.","blocks":[{"label":"Ordering","rows":[{"l":"I would like","r":"Vorrei"},{"l":"Do you have?","r":"Avete?"},{"l":"The bill","r":"Il conto"}]}],"tip":"Always add \"per favore\" to sound extra polite."}},{"season":1,"num":12,"title":"Ordinare il cibo","subtitle":"Ordering food in Italian","cards":[{"it":"Cosa c'è?","en":"What is there?","ex":"\"Cosa c'è di buono oggi?\""},{"it":"La pasta","en":"Pasta","ex":"\"Prendo la pasta al pomodoro.\""},{"it":"Un primo","en":"A first course","ex":"\"Come primo prendo le tagliatelle.\""},{"it":"Un secondo","en":"A main course","ex":"\"Come secondo vorrei il pollo.\""},{"it":"Il contorno","en":"Side dish","ex":"\"Che contorni avete?\""},{"it":"È buonissimo!","en":"It's delicious!","ex":"\"Questa pizza è buonissima!\""}],"phrases":[{"it":"Cosa c'è di buono oggi?","en":"What's good today?"},{"it":"Prendo la pasta al pomodoro.","en":"I'll have the tomato pasta."},{"it":"Vorrei il pesce come secondo.","en":"I'd like the fish as a main."},{"it":"È buonissimo!","en":"It's delicious!"}],"notes":{"title":"Ordering a meal","intro":"Italian meals follow a structure: antipasto, primo, secondo, contorno, dolce.","blocks":[{"label":"Course order","rows":[{"l":"Starter","r":"l'antipasto"},{"l":"First course","r":"il primo"},{"l":"Main","r":"il secondo"},{"l":"Side","r":"il contorno"},{"l":"Dessert","r":"il dolce"}]}],"tip":"It's fine to order just one or two courses."}},{"season":1,"num":13,"title":"Al ristorante","subtitle":"At the Italian restaurant","cards":[{"it":"Un tavolo per due","en":"A table for two","ex":"\"Avete un tavolo per due?\""},{"it":"La prenotazione","en":"The reservation","ex":"\"Ho una prenotazione.\""},{"it":"Il menù","en":"The menu","ex":"\"Posso vedere il menù?\""},{"it":"Sono allergico a…","en":"I'm allergic to…","ex":"\"Sono allergico alle noci.\""},{"it":"Il cameriere","en":"The waiter","ex":"\"Scusi, cameriere!\""},{"it":"Buon appetito!","en":"Enjoy your meal!","ex":"\"Buon appetito a tutti!\""}],"phrases":[{"it":"Avete un tavolo per due?","en":"Do you have a table for two?"},{"it":"Posso vedere il menù?","en":"Can I see the menu?"},{"it":"Sono allergico al glutine.","en":"I'm allergic to gluten."},{"it":"Scusi, il conto per favore.","en":"Excuse me, the bill please."}],"notes":{"title":"Restaurant essentials","intro":"A few key phrases make dining out in Italy much more enjoyable.","blocks":[{"label":"Key phrases","rows":[{"l":"A table for two","r":"un tavolo per due"},{"l":"The menu","r":"il menù"},{"l":"Enjoy your meal","r":"buon appetito"}]}],"tip":"\"Scusi\" is the polite way to get a waiter's attention."}},{"season":1,"num":14,"title":"In albergo","subtitle":"Checking into a hotel","cards":[{"it":"Ho una prenotazione","en":"I have a reservation","ex":"\"Ho una prenotazione a nome Smith.\""},{"it":"La camera","en":"The room","ex":"\"La mia camera è al terzo piano.\""},{"it":"La chiave","en":"The key","ex":"\"Ecco la chiave della camera.\""},{"it":"L'ascensore","en":"The lift","ex":"\"Dov'è l'ascensore?\""},{"it":"La colazione","en":"Breakfast","ex":"\"A che ora è la colazione?\""},{"it":"Fare il check-out","en":"To check out","ex":"\"Devo fare il check-out alle dieci.\""}],"phrases":[{"it":"Ho una prenotazione a nome Smith.","en":"I have a reservation in the name of Smith."},{"it":"A che ora è la colazione?","en":"What time is breakfast?"},{"it":"Dov'è l'ascensore?","en":"Where is the lift?"},{"it":"A che ora devo lasciare la camera?","en":"What time do I need to leave the room?"}],"notes":{"title":"Hotel vocabulary","intro":"Italian hotels range from one to five stars. Breakfast is often included.","blocks":[{"label":"Essentials","rows":[{"l":"Room","r":"la camera"},{"l":"Key","r":"la chiave"},{"l":"Lift","r":"l'ascensore"},{"l":"Breakfast","r":"la colazione"}]}],"tip":"\"Mezza pensione\" = half board; \"pensione completa\" = full board."}},{"season":1,"num":15,"title":"I numeri in pratica","subtitle":"Numbers for prices and dates","cards":[{"it":"Undici","en":"Eleven","ex":"\"Costa undici euro.\""},{"it":"Venti","en":"Twenty","ex":"\"Ho vent'anni.\""},{"it":"Trenta","en":"Thirty","ex":"\"Trenta minuti.\""},{"it":"Cento","en":"One hundred","ex":"\"Cento euro!\""},{"it":"Quant'è?","en":"How much is it?","ex":"\"Quant'è in tutto?\""},{"it":"Il resto","en":"The change","ex":"\"Tenga il resto.\""}],"phrases":[{"it":"Quant'è in tutto?","en":"How much is it altogether?"},{"it":"Costa quarantacinque euro.","en":"It costs forty-five euros."},{"it":"Ho solo cinquanta euro.","en":"I only have fifty euros."},{"it":"Tenga il resto.","en":"Keep the change."}],"notes":{"title":"Numbers 11–100","intro":"Once you know 1–10, Italian numbers follow a regular pattern.","blocks":[{"label":"Tens","rows":[{"l":"20","r":"venti"},{"l":"30","r":"trenta"},{"l":"40","r":"quaranta"},{"l":"50","r":"cinquanta"},{"l":"100","r":"cento"}]}],"tip":"21 = ventuno, 22 = ventidue. Drop the final vowel before uno and otto."}},{"season":1,"num":16,"title":"Fare shopping","subtitle":"Shopping vocabulary","cards":[{"it":"Quanto costa?","en":"How much does it cost?","ex":"\"Quanto costa questa borsa?\""},{"it":"Troppo caro","en":"Too expensive","ex":"\"È troppo caro per me.\""},{"it":"Uno sconto","en":"A discount","ex":"\"C'è uno sconto?\""},{"it":"La taglia","en":"The size","ex":"\"Che taglia porta?\""},{"it":"Sto cercando…","en":"I'm looking for…","ex":"\"Sto cercando una camicia bianca.\""},{"it":"Lo prendo!","en":"I'll take it!","ex":"\"Perfetto, lo prendo!\""}],"phrases":[{"it":"Quanto costa questa borsa?","en":"How much does this bag cost?"},{"it":"Ha qualcosa di meno caro?","en":"Do you have something cheaper?"},{"it":"Posso provarlo?","en":"Can I try it on?"},{"it":"Lo prendo!","en":"I'll take it!"}],"notes":{"title":"Shopping phrases","intro":"Shopping in Italy is a pleasure – markets offer great local produce and crafts.","blocks":[{"label":"Shopping vocab","rows":[{"l":"How much?","r":"quanto costa?"},{"l":"Too expensive","r":"troppo caro"},{"l":"Discount","r":"uno sconto"},{"l":"Size","r":"la taglia"}]}],"tip":"\"Saldo\" means sale – look out for this word in shop windows!"}},{"season":1,"num":17,"title":"Informazioni turistiche","subtitle":"Tourist information and sightseeing","cards":[{"it":"Un biglietto","en":"A ticket","ex":"\"Vorrei un biglietto per il museo.\""},{"it":"Il museo","en":"The museum","ex":"\"Il museo è chiuso il lunedì.\""},{"it":"La chiesa","en":"The church","ex":"\"La chiesa è bellissima.\""},{"it":"A che ora apre?","en":"What time does it open?","ex":"\"A che ora apre il museo?\""},{"it":"Ingresso gratuito","en":"Free entry","ex":"\"C'è l'ingresso gratuito?\""},{"it":"Un souvenir","en":"A souvenir","ex":"\"Cerco un souvenir per mia madre.\""}],"phrases":[{"it":"Vorrei un biglietto per il museo.","en":"I'd like a ticket for the museum."},{"it":"A che ora chiude?","en":"What time does it close?"},{"it":"C'è l'ingresso gratuito?","en":"Is there free entry?"},{"it":"Dov'è l'ufficio informazioni?","en":"Where is the information office?"}],"notes":{"title":"Sightseeing vocabulary","intro":"Italy has more UNESCO World Heritage Sites than any other country!","blocks":[{"label":"Places","rows":[{"l":"Museum","r":"il museo"},{"l":"Church","r":"la chiesa"},{"l":"Gallery","r":"la galleria"},{"l":"Square","r":"la piazza"}]}],"tip":"Many Italian churches are free to enter – cover shoulders and knees."}},{"season":1,"num":18,"title":"Chiedere la strada","subtitle":"Asking for and giving directions","cards":[{"it":"Scusi…","en":"Excuse me…","ex":"\"Scusi, dov'è la stazione?\""},{"it":"Giri a destra","en":"Turn right","ex":"\"Giri a destra al semaforo.\""},{"it":"Giri a sinistra","en":"Turn left","ex":"\"Giri a sinistra dopo il ponte.\""},{"it":"Vada dritto","en":"Go straight on","ex":"\"Vada dritto per cento metri.\""},{"it":"È lontano?","en":"Is it far?","ex":"\"È lontano a piedi?\""},{"it":"A piedi","en":"On foot","ex":"\"Si può andare a piedi.\""}],"phrases":[{"it":"Scusi, dov'è la stazione?","en":"Excuse me, where is the station?"},{"it":"Giri a destra al semaforo.","en":"Turn right at the traffic lights."},{"it":"È lontano a piedi?","en":"Is it far to walk?"},{"it":"La ringrazio molto.","en":"Thank you very much."}],"notes":{"title":"Giving directions","intro":"Italians are generally very helpful when asked for directions.","blocks":[{"label":"Directions","rows":[{"l":"Right","r":"a destra"},{"l":"Left","r":"a sinistra"},{"l":"Straight on","r":"dritto"},{"l":"At the lights","r":"al semaforo"}]}],"tip":"\"Scusi\" (formal) with strangers, \"Scusa\" (informal) with friends."}},{"season":1,"num":19,"title":"I mezzi di trasporto","subtitle":"Getting around by public transport","cards":[{"it":"L'autobus","en":"The bus","ex":"\"L'autobus numero dieci va in centro.\""},{"it":"Il treno","en":"The train","ex":"\"Il treno parte alle otto.\""},{"it":"La metropolitana","en":"The underground","ex":"\"Prendo la metropolitana.\""},{"it":"La fermata","en":"The stop","ex":"\"Qual è la prossima fermata?\""},{"it":"Il capolinea","en":"The terminus","ex":"\"Il capolinea è in piazza.\""},{"it":"Dove devo scendere?","en":"Where do I get off?","ex":"\"Dove devo scendere per il Duomo?\""}],"phrases":[{"it":"C'è un autobus per il centro?","en":"Is there a bus to the centre?"},{"it":"Dove devo scendere per il Duomo?","en":"Where do I get off for the cathedral?"},{"it":"Devo cambiare?","en":"Do I need to change?"},{"it":"A che ora parte il prossimo treno?","en":"What time does the next train leave?"}],"notes":{"title":"Public transport","intro":"Italy has excellent public transport in cities. Validate your ticket before boarding!","blocks":[{"label":"Transport","rows":[{"l":"Bus","r":"l'autobus"},{"l":"Train","r":"il treno"},{"l":"Underground","r":"la metropolitana"},{"l":"Tram","r":"il tram"}]}],"tip":"Always validate (timbrare) your ticket or you may get a fine!"}},{"season":1,"num":20,"title":"Comprare i biglietti","subtitle":"Buying train tickets","cards":[{"it":"Un biglietto di andata","en":"A single ticket","ex":"\"Un biglietto di andata per Roma.\""},{"it":"Andata e ritorno","en":"Return ticket","ex":"\"Andata e ritorno per Venezia.\""},{"it":"Il binario","en":"The platform","ex":"\"Da quale binario parte il treno?\""},{"it":"La coincidenza","en":"The connection","ex":"\"Devo prendere la coincidenza.\""},{"it":"Il ritardo","en":"The delay","ex":"\"C'è un ritardo di venti minuti.\""},{"it":"In prima classe","en":"First class","ex":"\"Vorrei un posto in prima classe.\""}],"phrases":[{"it":"Un biglietto di andata per Firenze.","en":"A single to Florence."},{"it":"Da quale binario parte il treno?","en":"Which platform does the train leave from?"},{"it":"Il treno è in ritardo?","en":"Is the train delayed?"},{"it":"C'è un posto vicino al finestrino?","en":"Is there a window seat?"}],"notes":{"title":"At the train station","intro":"Italian trains are a great way to travel. Book in advance for the best prices.","blocks":[{"label":"Ticket types","rows":[{"l":"Single","r":"di andata"},{"l":"Return","r":"andata e ritorno"},{"l":"1st class","r":"prima classe"},{"l":"2nd class","r":"seconda classe"}]}],"tip":"Validate regional train tickets in the yellow machines on the platform before boarding."}},{"season":1,"num":21,"title":"Il tempo e le stagioni","subtitle":"Weather and seasons in Italian","cards":[{"it":"Che tempo fa?","en":"What's the weather like?","ex":"\"Che tempo fa oggi?\""},{"it":"Fa bello","en":"It's fine","ex":"\"Fa bello oggi!\""},{"it":"Fa freddo","en":"It's cold","ex":"\"Fa molto freddo in inverno.\""},{"it":"Piove","en":"It's raining","ex":"\"Piove spesso in autunno.\""},{"it":"Nevica","en":"It's snowing","ex":"\"Nevica in montagna.\""},{"it":"Le stagioni","en":"The seasons","ex":"\"Le quattro stagioni.\""}],"phrases":[{"it":"Che tempo fa oggi?","en":"What's the weather like today?"},{"it":"In estate fa molto caldo.","en":"In summer it's very hot."},{"it":"Piove spesso in primavera.","en":"It rains a lot in spring."},{"it":"Porta un ombrello – potrebbe piovere.","en":"Take an umbrella – it might rain."}],"notes":{"title":"Weather and seasons","intro":"Italy has a varied climate – the north is cooler, the south and islands are warmer.","blocks":[{"label":"Seasons","rows":[{"l":"Spring","r":"la primavera"},{"l":"Summer","r":"l'estate"},{"l":"Autumn","r":"l'autunno"},{"l":"Winter","r":"l'inverno"}]}],"tip":"\"Fa\" + adjective: fa caldo (hot), fa freddo (cold)."}},{"season":1,"num":22,"title":"Le parti del corpo","subtitle":"Body parts vocabulary","cards":[{"it":"La testa","en":"The head","ex":"\"Mi fa male la testa.\""},{"it":"La mano","en":"The hand","ex":"\"Ho la mano destra.\""},{"it":"Il piede","en":"The foot","ex":"\"Mi sono fatto male al piede.\""},{"it":"La schiena","en":"The back","ex":"\"Ho mal di schiena.\""},{"it":"Lo stomaco","en":"The stomach","ex":"\"Ho mal di stomaco.\""},{"it":"Il braccio","en":"The arm","ex":"\"Il braccio sinistro.\""}],"phrases":[{"it":"Mi fa male la testa.","en":"My head hurts."},{"it":"Ho mal di schiena.","en":"I have back pain."},{"it":"Mi sono fatto male al ginocchio.","en":"I've hurt my knee."},{"it":"Non mi sento bene.","en":"I'm not feeling well."}],"notes":{"title":"Parts of the body","intro":"\"Mi fa male…\" = my … hurts. \"Ho mal di…\" also works for pain.","blocks":[{"label":"Body parts","rows":[{"l":"Head","r":"la testa"},{"l":"Arm","r":"il braccio"},{"l":"Leg","r":"la gamba"},{"l":"Back","r":"la schiena"}]}],"tip":"\"Mi fanno male i piedi\" – use the plural \"fanno\" for more than one thing."}},{"season":1,"num":23,"title":"In farmacia","subtitle":"At the pharmacy","cards":[{"it":"Il farmacista","en":"The pharmacist","ex":"\"Il farmacista mi ha aiutato.\""},{"it":"Le aspirine","en":"Aspirin","ex":"\"Ha delle aspirine?\""},{"it":"Il cerotto","en":"A plaster","ex":"\"Ho bisogno di un cerotto.\""},{"it":"La ricetta","en":"The prescription","ex":"\"Ho la ricetta del medico.\""},{"it":"La febbre","en":"A fever","ex":"\"Ho la febbre alta.\""},{"it":"Quante volte al giorno?","en":"How many times a day?","ex":"\"Quante volte al giorno devo prenderlo?\""}],"phrases":[{"it":"Ha qualcosa per il mal di testa?","en":"Do you have something for a headache?"},{"it":"Ho la febbre.","en":"I have a fever."},{"it":"Serve la ricetta?","en":"Do you need a prescription?"},{"it":"Quante volte al giorno lo devo prendere?","en":"How many times a day should I take it?"}],"notes":{"title":"At the pharmacy","intro":"Italian pharmacies (farmacie, green cross) can advise on minor ailments.","blocks":[{"label":"Pharmacy words","rows":[{"l":"Pharmacist","r":"il farmacista"},{"l":"Prescription","r":"la ricetta"},{"l":"Plaster","r":"il cerotto"},{"l":"Tablets","r":"le compresse"}]}],"tip":"A rota system (turno) means one local pharmacy always stays open after hours."}},{"season":1,"num":24,"title":"L'alfabeto e i verbi","subtitle":"The alphabet and present tense verbs","cards":[{"it":"Come si scrive?","en":"How do you spell it?","ex":"\"Come si scrive il Suo cognome?\""},{"it":"Parlare","en":"To speak","ex":"\"Parlo italiano.\""},{"it":"Capire","en":"To understand","ex":"\"Capisco abbastanza bene.\""},{"it":"Non capisco","en":"I don't understand","ex":"\"Non capisco – può ripetere?\""},{"it":"Ripetere","en":"To repeat","ex":"\"Può ripetere più lentamente?\""},{"it":"Scrivere","en":"To write","ex":"\"Come si scrive questa parola?\""}],"phrases":[{"it":"Come si scrive il Suo nome?","en":"How do you spell your name?"},{"it":"Parlo un po' d'italiano.","en":"I speak a little Italian."},{"it":"Non capisco bene.","en":"I don't understand well."},{"it":"Può ripetere più lentamente?","en":"Can you repeat more slowly?"}],"notes":{"title":"The Italian alphabet","intro":"Italian has 21 letters. J, K, W, X, Y only appear in foreign words.","blocks":[{"label":"-are verbs (parlare)","rows":[{"l":"io","r":"parlo"},{"l":"tu","r":"parli"},{"l":"lui/lei","r":"parla"},{"l":"noi","r":"parliamo"}]}],"tip":"\"Si scrive\" means \"it is spelled\" – very useful for spelling things out."}},{"season":1,"num":25,"title":"Al telefono","subtitle":"Using the phone in Italian","cards":[{"it":"Pronto!","en":"Hello! (phone)","ex":"\"Pronto, chi parla?\""},{"it":"Chi parla?","en":"Who's speaking?","ex":"\"Scusi, chi parla?\""},{"it":"Un momento","en":"One moment","ex":"\"Un momento, prego.\""},{"it":"Lasci un messaggio","en":"Leave a message","ex":"\"Vuole lasciare un messaggio?\""},{"it":"Richiamare","en":"To call back","ex":"\"Può richiamare più tardi?\""},{"it":"La segreteria","en":"Voicemail","ex":"\"Ho ascoltato la segreteria.\""}],"phrases":[{"it":"Pronto, sono Marco.","en":"Hello, it's Marco."},{"it":"Posso parlare con Giulia?","en":"Can I speak to Giulia?"},{"it":"Un momento, prego.","en":"One moment, please."},{"it":"Può richiamare più tardi?","en":"Can you call back later?"}],"notes":{"title":"Phone etiquette","intro":"Italians answer the phone with \"Pronto!\" which literally means \"Ready!\"","blocks":[{"label":"Phone phrases","rows":[{"l":"Hello (phone)","r":"Pronto!"},{"l":"Who's speaking?","r":"Chi parla?"},{"l":"Hold on","r":"Un momento"},{"l":"Call back","r":"richiamare"}]}],"tip":"\"Pronto\" is only used on the phone – odd as a general greeting!"}},{"season":1,"num":26,"title":"Parliamo di noi","subtitle":"Talking about yourself","cards":[{"it":"Ho… anni","en":"I am … years old","ex":"\"Ho trent'anni.\""},{"it":"Sono nato/a a…","en":"I was born in…","ex":"\"Sono nata a Roma.\""},{"it":"Abito a…","en":"I live in…","ex":"\"Abito a Milano da tre anni.\""},{"it":"Lavoro come…","en":"I work as…","ex":"\"Lavoro come insegnante.\""},{"it":"Il mio hobby","en":"My hobby","ex":"\"Il mio hobby è la fotografia.\""},{"it":"Nel tempo libero","en":"In my free time","ex":"\"Nel mio tempo libero leggo molto.\""}],"phrases":[{"it":"Ho trent'anni.","en":"I'm thirty years old."},{"it":"Abito a Londra da cinque anni.","en":"I've lived in London for five years."},{"it":"Lavoro come insegnante.","en":"I work as a teacher."},{"it":"Nel tempo libero mi piace leggere.","en":"In my free time I like reading."}],"notes":{"title":"Talking about yourself","intro":"Being able to talk about yourself helps you make connections with Italian speakers.","blocks":[{"label":"Key structures","rows":[{"l":"Age","r":"Ho … anni"},{"l":"Origin","r":"Sono di …"},{"l":"Residence","r":"Abito a …"},{"l":"Profession","r":"Lavoro come …"}]}],"tip":"\"Da\" + time = for how long: \"Abito qui da tre anni\"."}},{"season":1,"num":27,"title":"Le professioni","subtitle":"Jobs and professions in Italian","cards":[{"it":"L'insegnante","en":"Teacher","ex":"\"Mia madre è insegnante.\""},{"it":"Il medico","en":"Doctor","ex":"\"Mio fratello è medico.\""},{"it":"L'avvocato","en":"Lawyer","ex":"\"Lavora come avvocato.\""},{"it":"Il cuoco","en":"Cook / Chef","ex":"\"È un cuoco molto bravo.\""},{"it":"Che lavoro fa?","en":"What do you do?","ex":"\"Che lavoro fa, scusi?\""},{"it":"Lavoro in…","en":"I work in…","ex":"\"Lavoro in un ospedale.\""}],"phrases":[{"it":"Che lavoro fa?","en":"What do you do for work?"},{"it":"Sono medico.","en":"I'm a doctor."},{"it":"Lavoro in un ufficio.","en":"I work in an office."},{"it":"Mi piace molto il mio lavoro.","en":"I really like my job."}],"notes":{"title":"Jobs in Italian","intro":"No article with professions after \"essere\": \"Sono medico\".","blocks":[{"label":"Professions","rows":[{"l":"Teacher","r":"l'insegnante"},{"l":"Doctor","r":"il medico"},{"l":"Lawyer","r":"l'avvocato"},{"l":"Engineer","r":"l'ingegnere"}]}],"tip":"Add an adjective and the article returns: \"Sono un buon medico\"."}},{"season":1,"num":28,"title":"Mi piace…","subtitle":"Expressing likes and dislikes","cards":[{"it":"Mi piace","en":"I like (singular)","ex":"\"Mi piace la pasta.\""},{"it":"Mi piacciono","en":"I like (plural)","ex":"\"Mi piacciono i gatti.\""},{"it":"Non mi piace","en":"I don't like","ex":"\"Non mi piace il calcio.\""},{"it":"Adoro","en":"I love","ex":"\"Adoro la pizza napoletana.\""},{"it":"Preferisco","en":"I prefer","ex":"\"Preferisco il caffè al tè.\""},{"it":"Che ne pensi?","en":"What do you think?","ex":"\"Che ne pensi di questo film?\""}],"phrases":[{"it":"Mi piace molto la musica italiana.","en":"I really like Italian music."},{"it":"Non mi piacciono i film dell'orrore.","en":"I don't like horror films."},{"it":"Adoro la cucina italiana.","en":"I love Italian cooking."},{"it":"Preferisco stare a casa.","en":"I prefer to stay at home."}],"notes":{"title":"Mi piace / mi piacciono","intro":"\"Piacere\" is back-to-front: \"mi piace\" = \"it pleases me\".","blocks":[{"label":"Piacere","rows":[{"l":"I like it","r":"mi piace"},{"l":"I like them","r":"mi piacciono"},{"l":"You like it","r":"ti piace"},{"l":"He/she likes it","r":"gli/le piace"}]}],"tip":"Use \"piace\" for singular nouns/infinitives; \"piacciono\" for plural nouns."}},{"season":1,"num":29,"title":"Gli aggettivi possessivi","subtitle":"Possessive adjectives in Italian","cards":[{"it":"Il mio / La mia","en":"My (m/f)","ex":"\"Il mio nome. La mia casa.\""},{"it":"Il tuo / La tua","en":"Your (inf. m/f)","ex":"\"Il tuo amico. La tua amica.\""},{"it":"Il suo / La sua","en":"His / Her / Your (formal)","ex":"\"Il suo libro. La sua borsa.\""},{"it":"Il nostro / La nostra","en":"Our (m/f)","ex":"\"Il nostro appartamento.\""},{"it":"I miei / Le mie","en":"My (m pl / f pl)","ex":"\"I miei genitori. Le mie sorelle.\""},{"it":"Famiglia – no article!","en":"Family nouns drop the article","ex":"\"Mia madre. Mio fratello.\""}],"phrases":[{"it":"Il mio nome è…","en":"My name is…"},{"it":"Dov'è la sua famiglia?","en":"Where is your family?"},{"it":"Questo è il nostro appartamento.","en":"This is our apartment."},{"it":"Come si chiama il tuo cane?","en":"What's your dog's name?"}],"notes":{"title":"Possessive adjectives","intro":"Possessives agree with the noun they describe, not the owner.","blocks":[{"label":"Singular","rows":[{"l":"My","r":"mio/mia"},{"l":"Your (inf)","r":"tuo/tua"},{"l":"His/Her","r":"suo/sua"},{"l":"Our","r":"nostro/nostra"}]}],"tip":"Drop the article with singular family members: \"mia madre\", \"mio padre\"."}},{"season":1,"num":30,"title":"Descrivere le persone","subtitle":"Describing people in Italian","cards":[{"it":"Alto / Alta","en":"Tall (m/f)","ex":"\"Mio fratello è molto alto.\""},{"it":"Basso / Bassa","en":"Short (m/f)","ex":"\"La mia amica è bassa.\""},{"it":"I capelli","en":"Hair","ex":"\"Ha i capelli lunghi e biondi.\""},{"it":"Gli occhi","en":"Eyes","ex":"\"Ha gli occhi azzurri.\""},{"it":"Simpatico","en":"Nice / Friendly","ex":"\"È una persona molto simpatica.\""},{"it":"Com'è?","en":"What's he/she like?","ex":"\"Com'è il tuo professore?\""}],"phrases":[{"it":"Mia sorella è alta e mora.","en":"My sister is tall and dark-haired."},{"it":"Ha i capelli corti e ricci.","en":"He/she has short, curly hair."},{"it":"È una persona molto gentile.","en":"He/she is a very kind person."},{"it":"Com'è il tuo migliore amico?","en":"What is your best friend like?"}],"notes":{"title":"Describing appearances","intro":"Adjectives in Italian agree with the noun in gender and number.","blocks":[{"label":"Adjectives","rows":[{"l":"Tall","r":"alto/alta"},{"l":"Short","r":"basso/bassa"},{"l":"Thin","r":"magro/magra"},{"l":"Curly","r":"riccio/riccia"}]}],"tip":"\"Mora/moro\" = dark-haired; \"bionda/biondo\" = blonde."}},{"season":1,"num":31,"title":"Arriviamo in Italia!","subtitle":"Arriving in Italy","cards":[{"it":"Il passaporto","en":"The passport","ex":"\"Ecco il mio passaporto.\""},{"it":"Il controllo passaporti","en":"Passport control","ex":"\"Dobbiamo passare per il controllo.\""},{"it":"Il bagaglio","en":"The luggage","ex":"\"Ho perso il mio bagaglio.\""},{"it":"L'uscita","en":"The exit","ex":"\"Dov'è l'uscita?\""},{"it":"Il taxi","en":"The taxi","ex":"\"Prendo un taxi per il centro.\""},{"it":"Quanto ci vuole?","en":"How long does it take?","ex":"\"Quanto ci vuole per arrivare in centro?\""}],"phrases":[{"it":"Ho perso il mio bagaglio.","en":"I've lost my luggage."},{"it":"Dov'è l'uscita?","en":"Where is the exit?"},{"it":"Quanto ci vuole per arrivare in centro?","en":"How long does it take to get to the centre?"},{"it":"Posso prenotare un taxi?","en":"Can I book a taxi?"}],"notes":{"title":"Arriving in Italy","intro":"Italian airports are called \"aeroporti\". Most major cities have good transport links.","blocks":[{"label":"Airport vocab","rows":[{"l":"Passport","r":"il passaporto"},{"l":"Luggage","r":"il bagaglio"},{"l":"Exit","r":"l'uscita"},{"l":"Arrivals","r":"gli arrivi"}]}],"tip":"\"Quanto ci vuole?\" is a very useful phrase for travellers."}},{"season":1,"num":32,"title":"C'è un autobus?","subtitle":"Navigating the Italian city","cards":[{"it":"La pianta della città","en":"The city map","ex":"\"Ha una pianta della città?\""},{"it":"Il centro storico","en":"The old town","ex":"\"Voglio visitare il centro storico.\""},{"it":"La fermata","en":"The stop","ex":"\"Qual è la prossima fermata?\""},{"it":"Cambiare","en":"To change (bus/train)","ex":"\"Devo cambiare autobus?\""},{"it":"L'orario","en":"The timetable","ex":"\"Dove posso trovare l'orario?\""},{"it":"Dove si compra?","en":"Where can I buy (a ticket)?","ex":"\"Dove si compra il biglietto?\""}],"phrases":[{"it":"C'è un autobus per il centro storico?","en":"Is there a bus to the old town?"},{"it":"Dove si compra il biglietto?","en":"Where can I buy a ticket?"},{"it":"Devo cambiare?","en":"Do I need to change?"},{"it":"Qual è il capolinea?","en":"What is the terminus?"}],"notes":{"title":"City navigation","intro":"Most Italian cities have good bus networks, and some have trams or metro.","blocks":[{"label":"Getting around","rows":[{"l":"Map","r":"la pianta"},{"l":"Old town","r":"il centro storico"},{"l":"Stop","r":"la fermata"},{"l":"Timetable","r":"l'orario"}]}],"tip":"Buy bus tickets at a tabaccheria before boarding – not on the bus!"}},{"season":1,"num":33,"title":"Ho una prenotazione","subtitle":"Hotel check-in and problems","cards":[{"it":"Fare il check-in","en":"To check in","ex":"\"Vorrei fare il check-in.\""},{"it":"Il piano","en":"The floor","ex":"\"La camera è al secondo piano.\""},{"it":"La vista sul mare","en":"Sea view","ex":"\"Vorrei una camera con vista sul mare.\""},{"it":"Il Wi-Fi","en":"Wi-Fi","ex":"\"Qual è la password del Wi-Fi?\""},{"it":"C'è un problema","en":"There's a problem","ex":"\"C'è un problema con la camera.\""},{"it":"Cambiare camera","en":"To change rooms","ex":"\"Posso cambiare camera?\""}],"phrases":[{"it":"Ho una prenotazione per tre notti.","en":"I have a reservation for three nights."},{"it":"C'è la colazione inclusa?","en":"Is breakfast included?"},{"it":"Qual è la password del Wi-Fi?","en":"What's the Wi-Fi password?"},{"it":"C'è un problema con il riscaldamento.","en":"There's a problem with the heating."}],"notes":{"title":"Hotel check-in","intro":"Most Italian hotels ask for your passport at check-in – required by law.","blocks":[{"label":"Hotel issues","rows":[{"l":"No hot water","r":"no acqua calda"},{"l":"Too noisy","r":"troppo rumoroso"},{"l":"Change rooms","r":"cambiare camera"},{"l":"Broken","r":"rotto/a"}]}],"tip":"\"Potrebbe risolvere il problema?\" = \"Could you sort the problem?\""}},{"season":1,"num":34,"title":"Fate colazione?","subtitle":"Breakfast at an Italian café","cards":[{"it":"Il bar","en":"The café","ex":"\"Gli italiani fanno colazione al bar.\""},{"it":"Il cornetto","en":"Croissant","ex":"\"Un cornetto alla crema, per favore.\""},{"it":"Il cappuccino","en":"Cappuccino","ex":"\"Un cappuccino, per favore.\""},{"it":"Il succo d'arancia","en":"Orange juice","ex":"\"Un succo d'arancia fresco.\""},{"it":"Fare colazione","en":"To have breakfast","ex":"\"Di solito faccio colazione al bar.\""},{"it":"Qualcosa di salato?","en":"Something savoury?","ex":"\"Ha qualcosa di salato?\""}],"phrases":[{"it":"Fate colazione?","en":"Do you serve breakfast?"},{"it":"Un cappuccino e un cornetto, per favore.","en":"A cappuccino and a croissant, please."},{"it":"Ha qualcosa di salato?","en":"Do you have something savoury?"},{"it":"Un succo d'arancia fresco, grazie.","en":"A fresh orange juice, please."}],"notes":{"title":"Italian breakfast","intro":"Italians typically have a quick breakfast at the bar – a cappuccino and cornetto!","blocks":[{"label":"Breakfast vocab","rows":[{"l":"Croissant","r":"il cornetto"},{"l":"Cappuccino","r":"il cappuccino"},{"l":"Toast","r":"il toast"},{"l":"Juice","r":"il succo"}]}],"tip":"Cappuccino is a breakfast drink – ordering it after lunch may raise eyebrows!"}},{"season":1,"num":35,"title":"Avete bisogno di aiuto?","subtitle":"Asking for and giving help","cards":[{"it":"Potrebbe aiutarmi?","en":"Could you help me?","ex":"\"Scusi, potrebbe aiutarmi?\""},{"it":"Non lo so","en":"I don't know","ex":"\"Non lo so, mi dispiace.\""},{"it":"Come si arriva a…?","en":"How do you get to…?","ex":"\"Come si arriva al Colosseo?\""},{"it":"Un bancomat","en":"A cash machine","ex":"\"Dov'è il bancomat più vicino?\""},{"it":"Mi dispiace","en":"I'm sorry","ex":"\"Mi dispiace, non capisco.\""},{"it":"Grazie mille","en":"Thanks very much","ex":"\"Grazie mille per il Suo aiuto!\""}],"phrases":[{"it":"Scusi, potrebbe aiutarmi?","en":"Excuse me, could you help me?"},{"it":"Come si arriva al Colosseo?","en":"How do you get to the Colosseum?"},{"it":"Dov'è il bancomat più vicino?","en":"Where is the nearest cash machine?"},{"it":"Grazie mille per il Suo aiuto!","en":"Thank you very much for your help!"}],"notes":{"title":"Asking for help","intro":"Italians are welcoming to visitors who try to speak Italian.","blocks":[{"label":"Polite phrases","rows":[{"l":"Could you help?","r":"Potrebbe aiutarmi?"},{"l":"I don't know","r":"Non lo so"},{"l":"I'm sorry","r":"Mi dispiace"},{"l":"Thank you","r":"Grazie mille"}]}],"tip":"\"Potrebbe\" (could) sounds more polite than \"Può\" (can)."}},{"season":1,"num":36,"title":"Cercare qualcosa?","subtitle":"Shopping – finding what you want","cards":[{"it":"Posso provarlo?","en":"Can I try it on?","ex":"\"Posso provarlo?\""},{"it":"La taglia giusta","en":"The right size","ex":"\"Non è la taglia giusta.\""},{"it":"Vorrei restituire…","en":"I'd like to return…","ex":"\"Vorrei restituire questo.\""},{"it":"Lo scontrino","en":"The receipt","ex":"\"Ho lo scontrino.\""},{"it":"Pagare con carta","en":"To pay by card","ex":"\"Posso pagare con carta?\""},{"it":"Sto solo guardando","en":"Just looking","ex":"\"Sto solo guardando, grazie.\""}],"phrases":[{"it":"Posso provarlo?","en":"Can I try it on?"},{"it":"Non è la taglia giusta.","en":"It's not the right size."},{"it":"Vorrei restituire questo – ecco lo scontrino.","en":"I'd like to return this – here's the receipt."},{"it":"Posso pagare con carta di credito?","en":"Can I pay by credit card?"}],"notes":{"title":"Shopping review","intro":"Italian shops often have a \"no return\" policy (vendita finale). Check before you buy!","blocks":[{"label":"Shopping vocab","rows":[{"l":"Try on","r":"provare"},{"l":"Receipt","r":"lo scontrino"},{"l":"Pay by card","r":"pagare con carta"},{"l":"Cash","r":"i contanti"}]}],"tip":"\"Sto solo guardando\" (just looking) is useful when you want to browse without pressure."}},{"season":1,"num":37,"title":"Ho qualche domanda","subtitle":"Review and question practice","cards":[{"it":"Capisce?","en":"Do you understand?","ex":"\"Capisce quello che ho detto?\""},{"it":"Può ripetere?","en":"Can you repeat?","ex":"\"Può ripetere, per favore?\""},{"it":"Più lentamente","en":"More slowly","ex":"\"Può parlare più lentamente?\""},{"it":"Come si dice…?","en":"How do you say…?","ex":"\"Come si dice 'umbrella' in italiano?\""},{"it":"Non ricordo","en":"I can't remember","ex":"\"Non ricordo la parola.\""},{"it":"Perfetto!","en":"Perfect!","ex":"\"Perfetto, grazie!\""}],"phrases":[{"it":"Può ripetere più lentamente?","en":"Can you repeat more slowly?"},{"it":"Come si dice 'umbrella' in italiano?","en":"How do you say 'umbrella' in Italian?"},{"it":"Non capisco questa parola.","en":"I don't understand this word."},{"it":"Posso fare una domanda?","en":"Can I ask a question?"}],"notes":{"title":"Review strategies","intro":"Don't be afraid to ask for help – Italians love it when learners try!","blocks":[{"label":"Language survival","rows":[{"l":"Can you repeat?","r":"Può ripetere?"},{"l":"More slowly","r":"più lentamente"},{"l":"What does… mean?","r":"Cosa vuol dire…?"},{"l":"How do you say?","r":"Come si dice?"}]}],"tip":"\"Cosa vuol dire?\" and \"Come si dice?\" are learner superpowers!"}},{"season":1,"num":38,"title":"Dal medico","subtitle":"Medical Italian vocabulary","cards":[{"it":"Il medico","en":"The doctor","ex":"\"Ho bisogno di un medico.\""},{"it":"L'ospedale","en":"The hospital","ex":"\"Dov'è l'ospedale più vicino?\""},{"it":"La febbre","en":"Fever","ex":"\"Ho la febbre alta.\""},{"it":"Il raffreddore","en":"A cold","ex":"\"Ho il raffreddore.\""},{"it":"Ho mal di…","en":"I have a … ache","ex":"\"Ho mal di gola.\""},{"it":"Prendere una medicina","en":"To take medicine","ex":"\"Devo prendere questa medicina.\""}],"phrases":[{"it":"Ho la febbre alta.","en":"I have a high fever."},{"it":"Mi sento molto male.","en":"I'm feeling very unwell."},{"it":"Ho bisogno di vedere un medico.","en":"I need to see a doctor."},{"it":"Devo prendere questa medicina due volte al giorno.","en":"I need to take this medicine twice a day."}],"notes":{"title":"Medical vocabulary","intro":"In a medical emergency in Italy, call 118.","blocks":[{"label":"Symptoms","rows":[{"l":"Fever","r":"la febbre"},{"l":"Cold","r":"il raffreddore"},{"l":"Headache","r":"mal di testa"},{"l":"Stomachache","r":"mal di stomaco"}]}],"tip":"\"Chiami un'ambulanza!\" = \"Call an ambulance!\""}},{"season":1,"num":39,"title":"A tavola!","subtitle":"Food, cooking and Italian recipes","cards":[{"it":"La ricetta","en":"The recipe","ex":"\"Questa ricetta è molto semplice.\""},{"it":"Gli ingredienti","en":"The ingredients","ex":"\"Di che ingredienti ho bisogno?\""},{"it":"Cucinare","en":"To cook","ex":"\"Mi piace cucinare.\""},{"it":"Delizioso!","en":"Delicious!","ex":"\"È delizioso!\""},{"it":"Ho l'acquolina in bocca","en":"My mouth is watering","ex":"\"Che profumo – ho l'acquolina in bocca!\""},{"it":"A tavola!","en":"Come to the table!","ex":"\"A tavola, è pronto!\""}],"phrases":[{"it":"Questa ricetta è molto semplice.","en":"This recipe is very simple."},{"it":"Ho l'acquolina in bocca!","en":"My mouth is watering!"},{"it":"Come hai fatto questo piatto?","en":"How did you make this dish?"},{"it":"È la specialità della casa.","en":"It's the house speciality."}],"notes":{"title":"Food culture","intro":"Italian food varies enormously by region.","blocks":[{"label":"Cooking vocab","rows":[{"l":"Recipe","r":"la ricetta"},{"l":"Ingredients","r":"gli ingredienti"},{"l":"To cook","r":"cucinare"},{"l":"To taste","r":"assaggiare"}]}],"tip":"\"L'acquolina in bocca\" literally means \"the little water in the mouth\"!"}},{"season":1,"num":40,"title":"Il passato","subtitle":"Past tense in Italian","cards":[{"it":"Ho mangiato","en":"I ate / I have eaten","ex":"\"Ho mangiato una pizza deliziosa.\""},{"it":"Sono andato/a","en":"I went","ex":"\"Sono andato al mercato.\""},{"it":"Ieri","en":"Yesterday","ex":"\"Ieri ho visitato il museo.\""},{"it":"La settimana scorsa","en":"Last week","ex":"\"La settimana scorsa sono andata a Roma.\""},{"it":"Avere (passato)","en":"Have – used with most verbs","ex":"\"Ho parlato con Maria.\""},{"it":"Essere (passato)","en":"Be – used with movement verbs","ex":"\"Sono arrivata tardi.\""}],"phrases":[{"it":"Ieri ho visitato il museo.","en":"Yesterday I visited the museum."},{"it":"Sono andato al mercato stamattina.","en":"I went to the market this morning."},{"it":"Abbiamo mangiato benissimo!","en":"We ate very well!"},{"it":"La settimana scorsa sono andata a Roma.","en":"Last week I went to Rome."}],"notes":{"title":"Il passato prossimo","intro":"Formed with avere or essere + past participle.","blocks":[{"label":"Past participles","rows":[{"l":"mangiare → mangiato","r":"eaten"},{"l":"andare → andato/a","r":"gone"},{"l":"parlare → parlato","r":"spoken"},{"l":"vedere → visto","r":"seen"}]}],"tip":"Use \"essere\" with verbs of movement: andare, venire, partire, arrivare."}}];
     function findSN() {
-      var btn = document.querySelector('button');
-      if (!btn) return null;
-      var fk = Object.keys(btn).find(function(k){return k.startsWith('__reactFiber');});
-      if (!fk) return null;
-      var f = btn[fk];
-      while (f) {
-        if (f.type && f.type.name === 'StreamableComponent' && f.stateNode && f.stateNode.logic) return f.stateNode;
-        f = f.return;
-      }
+      var btn=document.querySelector('button'); if(!btn)return null;
+      var fk=Object.keys(btn).find(function(k){return k.startsWith('__reactFiber');}); if(!fk)return null;
+      var f=btn[fk];
+      while(f){ if(f.type&&f.type.name==='StreamableComponent'&&f.stateNode&&f.stateNode.logic)return f.stateNode; f=f.return; }
       return null;
     }
-
     function doPatch() {
-      var sn = findSN();
-      if (!sn || !sn.logic || !sn.logic.LESSONS) return false;
-      var logic = sn.logic;
-      if (logic.LESSONS.filter(function(l){return l.season===1;}).length >= 40) return true;
-      var lastS1idx = -1;
-      logic.LESSONS.forEach(function(l,i){if(l.season===1) lastS1idx=i;});
-      if (lastS1idx < 0) return false;
-      var args = [lastS1idx+1, 0].concat(extra);
-      Array.prototype.splice.apply(logic.LESSONS, args);
-      sn.setState({__s1patch: Date.now()});
-      return true;
+      var sn=findSN(); if(!sn||!sn.logic||!sn.logic.LESSONS)return false;
+      var logic=sn.logic;
+      if(logic.LESSONS.filter(function(l){return l.season===1;}).length>=40)return true;
+      var lastS1idx=-1; logic.LESSONS.forEach(function(l,i){if(l.season===1)lastS1idx=i;});
+      if(lastS1idx<0)return false;
+      var args=[lastS1idx+1,0].concat(extra); Array.prototype.splice.apply(logic.LESSONS,args);
+      sn.setState({__s1patch:Date.now()}); return true;
     }
-
-    if (!doPatch()) {
-      [500, 1000, 2000, 3500].forEach(function(t){ setTimeout(doPatch, t); });
-    }
+    if(!doPatch()){ [500,1000,2000,3500].forEach(function(t){setTimeout(doPatch,t);}); }
   })();
-
 
     const dead = Array.from(document.scripts);
     for (const old of dead) {
