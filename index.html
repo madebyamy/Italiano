@@ -454,11 +454,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     setTimeout(patchLessonGrid, 600);
     setTimeout(patchLessonGrid, 1500);
 
-    /* Find flashcard cell and phrases cell */
+    /* Find flashcard cell and phrases cell (case-insensitive) */
     var fcCell = null, phCell = null;
     [].forEach.call(bento.children, function(child) {
-      var txt = child.textContent || '';
-      if (!fcCell && txt.indexOf('FLASHCARDS') > -1 && txt.indexOf('tap to reveal') > -1) fcCell = child;
+      var txt = (child.textContent || '').toLowerCase();
+      if (!fcCell && txt.indexOf('flashcard') > -1) fcCell = child;
       if (!phCell && child.querySelector && child.querySelector('.marquee-track')) phCell = child;
     });
 
@@ -508,7 +508,198 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
     ['mfc-it','mfc-en','mfc-ex','mfc-tag'].forEach(function(id){ document.getElementById(id).addEventListener('keydown',function(e){if(e.key==='Enter')document.getElementById('mfc-add').click();}); });
 
+    /* Patch phrases display */
+    patchPhrasesDisplay();
+    setTimeout(patchPhrasesDisplay, 800);
+    setTimeout(patchPhrasesDisplay, 2000);
+
+    /* Wire lesson notes buttons */
+    wireNotesButtons();
+    setTimeout(wireNotesButtons, 800);
+    setTimeout(wireNotesButtons, 2000);
+
     refreshAll();
+  }
+
+  /* ── LESSON NOTES ── */
+  function getLessonNoteKey(lNum) { return 'italiano_lesson_note_S1L' + lNum; }
+
+  function getLessonContainer() {
+    var found = null;
+    [].forEach.call(document.querySelectorAll('div'), function(el) {
+      if (found) return;
+      if (el.__gridPatched) { found = el; return; }
+      var st = el.getAttribute('style') || '';
+      /* Also match by patched inline CSS in case __gridPatched is on a re-created element */
+      if (st.indexOf('repeat(auto-fill') > -1 && st.indexOf('overflow-y') > -1) found = el;
+    });
+    return found;
+  }
+
+  /* Collect lesson info by scanning all L-badge spans in the page */
+  function getLessons() {
+    var lessons = [], seen = {};
+    /* Badge spans have textContent "L1", "L2" etc. and may have 1 child (SVG/span) */
+    [].forEach.call(document.querySelectorAll('span'), function(el) {
+      var t = (el.textContent||'').trim();
+      if (!/^L\d+$/.test(t)) return;
+      var lNum = parseInt(t.slice(1));
+      if (seen[lNum]) return;
+      seen[lNum] = true;
+      /* Walk up to find the card wrapper (has >= 3 children) */
+      var card = el.parentNode;
+      while (card && card.children.length < 3) card = card.parentNode;
+      var titleEl = null;
+      if (card) {
+        [].forEach.call(card.querySelectorAll('*'), function(ch) {
+          if (titleEl) return;
+          var ct = (ch.textContent||'').trim();
+          /* Title: clean text, no L-digit prefix, no checkmarks, no nested elements, > 2 chars */
+          if (ct.length > 2 && ch.children.length === 0 && !/^L\d/.test(ct) && ct.indexOf('✓') < 0 && ct.indexOf('✗') < 0) titleEl = ch;
+        });
+      }
+      lessons.push({ num: lNum, title: titleEl ? titleEl.textContent.trim() : 'L' + lNum });
+    });
+    lessons.sort(function(a,b){ return a.num - b.num; });
+    return lessons;
+  }
+
+  function tryPopulateNotes(attempt) {
+    var lessons = getLessons();
+    if (lessons.length > 0) { refreshNotesPanel(); return; }
+    if ((attempt || 0) < 12) setTimeout(function() { tryPopulateNotes((attempt||0)+1); }, 300);
+  }
+
+  function refreshNotesPanel() {
+    var panel = document.getElementById('my-notes-panel');
+    if (!panel) return;
+    var sel = document.getElementById('ln-lesson-sel');
+    var ta = document.getElementById('ln-textarea');
+    if (!sel || !ta) return;
+    var lessons = getLessons();
+    /* Rebuild selector whenever lesson count grows */
+    if (lessons.length > 0 && sel.options.length !== lessons.length) {
+      var prev = sel.value;
+      sel.innerHTML = '';
+      lessons.forEach(function(l) {
+        var o = document.createElement('option');
+        o.value = l.num;
+        o.textContent = 'L' + l.num + ' — ' + l.title;
+        sel.appendChild(o);
+      });
+      if (prev) sel.value = prev;
+      /* Load note for selection */
+      var lNum = parseInt(sel.value);
+      if (lNum) ta.value = localStorage.getItem(getLessonNoteKey(lNum)) || '';
+    }
+  }
+
+  function wireNotesButtons() {
+    /* Always try to populate even if panel already exists */
+    if (document.getElementById('my-notes-panel')) { tryPopulateNotes(); return; }
+    var container = getLessonContainer();
+    if (!container || !container.parentNode) return;
+
+    var panel = document.createElement('div');
+    panel.id = 'my-notes-panel';
+    panel.style.cssText = 'background:#1a1030;border-radius:20px;padding:20px;margin-top:16px;width:100%;box-sizing:border-box;';
+    panel.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">' +
+        '<span style="font-size:12px;font-weight:700;color:#b8a4ed;letter-spacing:1.5px;text-transform:uppercase;flex-shrink:0;">My Lesson Notes</span>' +
+        '<select id="ln-lesson-sel" style="flex:1;min-width:160px;padding:7px 10px;border:none;border-radius:10px;background:#0d0a20;color:#fff;font-size:13px;font-family:inherit;outline:none;cursor:pointer;"></select>' +
+      '</div>' +
+      '<textarea id="ln-textarea" placeholder="Write your notes, vocab, grammar points, or questions for this lesson…" style="width:100%;min-height:140px;background:#0d0a20;border:1.5px solid rgba(184,164,237,.25);border-radius:12px;padding:12px;color:#fff;font-size:14px;font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;"></textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">' +
+        '<button id="ln-clear-btn" style="padding:8px 14px;border:none;border-radius:10px;background:rgba(255,255,255,.1);color:#b8a4ed;font-size:13px;cursor:pointer;font-family:inherit;">Clear</button>' +
+        '<button id="ln-save-btn" style="padding:8px 20px;border:none;border-radius:10px;background:#b8a4ed;color:#1a1030;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Save</button>' +
+      '</div>' +
+      '<div id="ln-status" style="font-size:12px;color:rgba(184,164,237,.6);text-align:right;margin-top:6px;min-height:16px;"></div>';
+
+    /* Insert after the lesson grid container */
+    container.parentNode.insertBefore(panel, container.nextSibling);
+
+    var sel = document.getElementById('ln-lesson-sel');
+    var ta = document.getElementById('ln-textarea');
+    var status = document.getElementById('ln-status');
+
+    /* Populate selector with retry */
+    tryPopulateNotes();
+
+    sel.addEventListener('change', function() {
+      ta.value = localStorage.getItem(getLessonNoteKey(parseInt(sel.value))) || '';
+      status.textContent = '';
+    });
+
+    document.getElementById('ln-clear-btn').onclick = function() { ta.value = ''; status.textContent = ''; };
+
+    document.getElementById('ln-save-btn').onclick = function() {
+      var lNum = parseInt(sel.value);
+      var t = ta.value.trim();
+      if (t) localStorage.setItem(getLessonNoteKey(lNum), t);
+      else localStorage.removeItem(getLessonNoteKey(lNum));
+      status.textContent = t ? 'Saved ✓' : 'Cleared';
+      setTimeout(function() { status.textContent = ''; }, 2000);
+    };
+
+    /* Auto-save on blur */
+    ta.addEventListener('blur', function() {
+      var lNum = parseInt(sel.value);
+      var t = ta.value.trim();
+      if (t) localStorage.setItem(getLessonNoteKey(lNum), t);
+      else localStorage.removeItem(getLessonNoteKey(lNum));
+    });
+  }
+
+  /* ── PHRASES PAGINATION ── */
+  function patchPhrasesDisplay() {
+    var track = document.querySelector('.marquee-track');
+    if (!track || track.__paged) return;
+    track.__paged = true;
+
+    var PAGE = 10;
+    var page = 0;
+
+    /* Stop marquee animation */
+    track.style.cssText += ';animation:none!important;transform:none!important;transition:none!important;';
+    var parent = track.parentNode;
+    parent.style.overflow = 'visible';
+
+    function getItems() { return Array.prototype.slice.call(track.children); }
+
+    function render() {
+      var items = getItems();
+      var totalPages = Math.max(1, Math.ceil(items.length / PAGE));
+      if (page >= totalPages) page = totalPages - 1;
+      items.forEach(function(item, i) {
+        item.style.display = (Math.floor(i / PAGE) === page) ? '' : 'none';
+      });
+      var ind = document.getElementById('ph-pg-ind');
+      if (ind) ind.textContent = (page + 1) + ' / ' + totalPages;
+    }
+
+    /* Inject controls above the track */
+    var ctrl = document.createElement('div');
+    ctrl.id = 'ph-pg-ctrl';
+    ctrl.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 28px 6px;';
+    ctrl.innerHTML =
+      '<button id="ph-pg-prev" style="border:none;background:rgba(255,255,255,.15);color:#fff;border-radius:9999px;padding:5px 14px;font-size:13px;cursor:pointer;font-family:inherit;">←</button>' +
+      '<span id="ph-pg-ind" style="flex:1;text-align:center;color:rgba(255,255,255,.6);font-size:13px;"></span>' +
+      '<button id="ph-pg-next" style="border:none;background:rgba(255,255,255,.15);color:#fff;border-radius:9999px;padding:5px 14px;font-size:13px;cursor:pointer;font-family:inherit;">→</button>';
+    parent.insertBefore(ctrl, track);
+
+    document.getElementById('ph-pg-prev').onclick = function() {
+      var total = Math.max(1, Math.ceil(getItems().length / PAGE));
+      page = (page - 1 + total) % total; render();
+    };
+    document.getElementById('ph-pg-next').onclick = function() {
+      var total = Math.max(1, Math.ceil(getItems().length / PAGE));
+      page = (page + 1) % total; render();
+    };
+
+    render();
+    /* Re-render when React adds/removes phrase items */
+    var mo = new MutationObserver(function() { render(); });
+    mo.observe(track, { childList: true });
   }
 
   setTimeout(init, 400);
