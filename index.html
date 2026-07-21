@@ -594,11 +594,30 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 
+  function getLessonNotesCell() {
+    /* Find the bento cell that has "lesson" + "note" in its text (case-insensitive) */
+    var bento = document.querySelector('div[style*="grid-template-columns"][style*="24px"]');
+    if (!bento) return null;
+    var found = null;
+    [].forEach.call(bento.children, function(child) {
+      if (found) return;
+      var txt = (child.textContent || '').toLowerCase();
+      if (txt.indexOf('lesson') > -1 && txt.indexOf('note') > -1) found = child;
+    });
+    return found;
+  }
+
   function wireNotesButtons() {
     /* Always try to populate even if panel already exists */
     if (document.getElementById('my-notes-panel')) { tryPopulateNotes(); return; }
-    var container = getLessonContainer();
-    if (!container || !container.parentNode) return;
+    /* Insert after the Lesson Notes bento cell if found, else after lesson grid */
+    var anchor = getLessonNotesCell();
+    if (!anchor) {
+      var container = getLessonContainer();
+      if (!container || !container.parentNode) return;
+      anchor = container;
+    }
+    if (!anchor.parentNode) return;
 
     var panel = document.createElement('div');
     panel.id = 'my-notes-panel';
@@ -615,8 +634,8 @@ document.addEventListener('DOMContentLoaded', async function() {
       '</div>' +
       '<div id="ln-status" style="font-size:12px;color:rgba(184,164,237,.6);text-align:right;margin-top:6px;min-height:16px;"></div>';
 
-    /* Insert after the lesson grid container */
-    container.parentNode.insertBefore(panel, container.nextSibling);
+    /* Insert after the Lesson Notes bento cell (or lesson grid as fallback) */
+    anchor.parentNode.insertBefore(panel, anchor.nextSibling);
 
     var sel = document.getElementById('ln-lesson-sel');
     var ta = document.getElementById('ln-textarea');
@@ -697,6 +716,29 @@ document.addEventListener('DOMContentLoaded', async function() {
     };
 
     render();
+
+    /* Auto-advance pages every 4 seconds, pause on hover */
+    var autoTimer = setInterval(function() {
+      var total = Math.max(1, Math.ceil(getItems().length / PAGE));
+      page = (page + 1) % total; render();
+    }, 4000);
+    ctrl.addEventListener('mouseenter', function() { clearInterval(autoTimer); });
+    ctrl.addEventListener('mouseleave', function() {
+      clearInterval(autoTimer);
+      autoTimer = setInterval(function() {
+        var total = Math.max(1, Math.ceil(getItems().length / PAGE));
+        page = (page + 1) % total; render();
+      }, 4000);
+    });
+    track.parentNode.addEventListener('mouseenter', function() { clearInterval(autoTimer); });
+    track.parentNode.addEventListener('mouseleave', function() {
+      clearInterval(autoTimer);
+      autoTimer = setInterval(function() {
+        var total = Math.max(1, Math.ceil(getItems().length / PAGE));
+        page = (page + 1) % total; render();
+      }, 4000);
+    });
+
     /* Re-render when React adds/removes phrase items */
     var mo = new MutationObserver(function() { render(); });
     mo.observe(track, { childList: true });
