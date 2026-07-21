@@ -143,12 +143,16 @@ document.addEventListener('DOMContentLoaded', async function() {
     var s = document.createElement('style');
     s.textContent =
       '@media (max-width:900px){' +
-        'html,body{max-width:100vw!important;overflow-x:hidden!important}' +
+        'html,body{max-width:100vw!important;overflow-x:hidden!important;box-sizing:border-box!important}' +
         '[style*="1fr 1fr"]{grid-template-columns:1fr!important}' +
         '[style*="460px"]{height:auto!important;min-height:auto!important}' +
         '[style*="28px 40px"],[style*="padding: 28px 40px"]{padding:16px!important}' +
         '[style*="font-size: 38px"],[style*="font-size:38px"]{font-size:24px!important}' +
         '[style*="1320px"]{padding-left:16px!important;padding-right:16px!important}' +
+        /* force all direct children of any grid to stay within track width */
+        '[style*="grid-template-columns"]>*{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}' +
+        /* constrain flex children inside bento cells */
+        '[style*="display: flex"]>*{min-width:0!important;flex-shrink:1!important}' +
         '#my-row{display:none!important}' +
       '}' +
       '#my-fc-slot,#my-ph-slot{width:100%;box-sizing:border-box;}' +
