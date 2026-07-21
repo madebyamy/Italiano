@@ -669,79 +669,19 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
   }
 
-  /* ── PHRASES PAGINATION ── */
+  /* ── PHRASES HOVER-TO-PAUSE ── */
   function patchPhrasesDisplay() {
     var track = document.querySelector('.marquee-track');
     if (!track || track.__paged) return;
     track.__paged = true;
-
-    var PAGE = 10;
-    var page = 0;
-
-    /* Stop marquee animation */
-    track.style.cssText += ';animation:none!important;transform:none!important;transition:none!important;';
+    /* Let the original marquee scroll run; just pause it on hover */
     var parent = track.parentNode;
-    parent.style.overflow = 'visible';
-
-    function getItems() { return Array.prototype.slice.call(track.children); }
-
-    function render() {
-      var items = getItems();
-      var totalPages = Math.max(1, Math.ceil(items.length / PAGE));
-      if (page >= totalPages) page = totalPages - 1;
-      items.forEach(function(item, i) {
-        item.style.display = (Math.floor(i / PAGE) === page) ? '' : 'none';
-      });
-      var ind = document.getElementById('ph-pg-ind');
-      if (ind) ind.textContent = (page + 1) + ' / ' + totalPages;
-    }
-
-    /* Inject controls above the track */
-    var ctrl = document.createElement('div');
-    ctrl.id = 'ph-pg-ctrl';
-    ctrl.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 28px 6px;';
-    ctrl.innerHTML =
-      '<button id="ph-pg-prev" style="border:none;background:rgba(255,255,255,.15);color:#fff;border-radius:9999px;padding:5px 14px;font-size:13px;cursor:pointer;font-family:inherit;">←</button>' +
-      '<span id="ph-pg-ind" style="flex:1;text-align:center;color:rgba(255,255,255,.6);font-size:13px;"></span>' +
-      '<button id="ph-pg-next" style="border:none;background:rgba(255,255,255,.15);color:#fff;border-radius:9999px;padding:5px 14px;font-size:13px;cursor:pointer;font-family:inherit;">→</button>';
-    parent.insertBefore(ctrl, track);
-
-    document.getElementById('ph-pg-prev').onclick = function() {
-      var total = Math.max(1, Math.ceil(getItems().length / PAGE));
-      page = (page - 1 + total) % total; render();
-    };
-    document.getElementById('ph-pg-next').onclick = function() {
-      var total = Math.max(1, Math.ceil(getItems().length / PAGE));
-      page = (page + 1) % total; render();
-    };
-
-    render();
-
-    /* Auto-advance pages every 4 seconds, pause on hover */
-    var autoTimer = setInterval(function() {
-      var total = Math.max(1, Math.ceil(getItems().length / PAGE));
-      page = (page + 1) % total; render();
-    }, 4000);
-    ctrl.addEventListener('mouseenter', function() { clearInterval(autoTimer); });
-    ctrl.addEventListener('mouseleave', function() {
-      clearInterval(autoTimer);
-      autoTimer = setInterval(function() {
-        var total = Math.max(1, Math.ceil(getItems().length / PAGE));
-        page = (page + 1) % total; render();
-      }, 4000);
+    parent.addEventListener('mouseenter', function() {
+      track.style.animationPlayState = 'paused';
     });
-    track.parentNode.addEventListener('mouseenter', function() { clearInterval(autoTimer); });
-    track.parentNode.addEventListener('mouseleave', function() {
-      clearInterval(autoTimer);
-      autoTimer = setInterval(function() {
-        var total = Math.max(1, Math.ceil(getItems().length / PAGE));
-        page = (page + 1) % total; render();
-      }, 4000);
+    parent.addEventListener('mouseleave', function() {
+      track.style.animationPlayState = 'running';
     });
-
-    /* Re-render when React adds/removes phrase items */
-    var mo = new MutationObserver(function() { render(); });
-    mo.observe(track, { childList: true });
   }
 
   setTimeout(init, 400);
