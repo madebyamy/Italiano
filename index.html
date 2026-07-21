@@ -623,16 +623,14 @@ document.addEventListener('DOMContentLoaded', async function() {
     panel.id = 'my-notes-panel';
     panel.style.cssText = 'background:#1a1030;border-radius:20px;padding:20px;margin-top:16px;width:100%;box-sizing:border-box;';
     panel.innerHTML =
-      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">' +
-        '<span style="font-size:12px;font-weight:700;color:#b8a4ed;letter-spacing:1.5px;text-transform:uppercase;flex-shrink:0;">My Lesson Notes</span>' +
-        '<select id="ln-lesson-sel" style="flex:1;min-width:160px;padding:7px 10px;border:none;border-radius:10px;background:#0d0a20;color:#fff;font-size:13px;font-family:inherit;outline:none;cursor:pointer;"></select>' +
-      '</div>' +
-      '<textarea id="ln-textarea" placeholder="Write your notes, vocab, grammar points, or questions for this lesson…" style="width:100%;min-height:140px;background:#0d0a20;border:1.5px solid rgba(184,164,237,.25);border-radius:12px;padding:12px;color:#fff;font-size:14px;font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;"></textarea>' +
-      '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">' +
-        '<button id="ln-clear-btn" style="padding:8px 14px;border:none;border-radius:10px;background:rgba(255,255,255,.1);color:#b8a4ed;font-size:13px;cursor:pointer;font-family:inherit;">Clear</button>' +
-        '<button id="ln-save-btn" style="padding:8px 20px;border:none;border-radius:10px;background:#b8a4ed;color:#1a1030;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;">Save</button>' +
-      '</div>' +
-      '<div id="ln-status" style="font-size:12px;color:rgba(184,164,237,.6);text-align:right;margin-top:6px;min-height:16px;"></div>';
+      '<span style="display:block;font-size:12px;font-weight:700;color:#b8a4ed;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;">My Lesson Notes</span>' +
+      '<select id="ln-lesson-sel" style="width:100%;padding:9px 12px;border:none;border-radius:12px;background:#0d0a20;color:#fff;font-size:14px;font-family:inherit;outline:none;cursor:pointer;margin-bottom:12px;box-sizing:border-box;"></select>' +
+      '<textarea id="ln-textarea" placeholder="Write your notes, vocab, grammar points…" style="width:100%;min-height:140px;background:#0d0a20;border:1.5px solid rgba(184,164,237,.25);border-radius:12px;padding:12px;color:#fff;font-size:14px;font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;"></textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;align-items:center;">' +
+        '<span id="ln-status" style="flex:1;font-size:12px;color:rgba(184,164,237,.6);"></span>' +
+        '<button id="ln-clear-btn" style="padding:8px 16px;border:none;border-radius:10px;background:rgba(255,255,255,.1);color:#b8a4ed;font-size:13px;cursor:pointer;font-family:inherit;white-space:nowrap;">Clear</button>' +
+        '<button id="ln-save-btn" style="padding:8px 22px;border:none;border-radius:10px;background:#b8a4ed;color:#1a1030;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit;white-space:nowrap;">Save</button>' +
+      '</div>';
 
     /* Insert after the Lesson Notes bento cell (or lesson grid as fallback) */
     anchor.parentNode.insertBefore(panel, anchor.nextSibling);
